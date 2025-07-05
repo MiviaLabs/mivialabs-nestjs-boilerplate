@@ -1,0 +1,262 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# TypeScript & ESLint Best Practices
+
+## Overview
+This rule helps avoid common TypeScript and ESLint errors when generating code, especially in test files and when working with strict TypeScript configurations.
+
+## Core Principles
+
+### 1. Type Safety in Tests
+When writing tests that need to delete properties or manipulate objects in ways that TypeScript doesn't allow:
+
+```typescript
+// ❌ BAD - TypeScript error: The operand of a 'delete' operator must be optional
+const invalidData = { ...validData };
+delete invalidData.workspaceId;
+
+// ✅ GOOD - Use type assertion for test scenarios
+const invalidData = { ...validData };
+delete (invalidData as any).workspaceId;
+```
+
+### 2. Interface Compliance
+When working with interfaces that have optional properties, ensure proper type checking:
+
+```typescript
+// ❌ BAD - Property might not exist
+expect(successResponse.error).toBeUndefined();
+
+// ✅ GOOD - Check property existence first
+expect('error' in successResponse ? successResponse.error : undefined).toBeUndefined();
+
+// ✅ BETTER - Use proper typing
+const successResponse: MicroserviceResponse = {
+  success: true,
+  data: { message: 'Operation successful' },
+};
+```
+
+### 3. Import Management
+Always import types and interfaces when using them:
+
+```typescript
+// ❌ BAD - Missing import
+const response = {
+  success: true,
+  data: { message: 'test' }
+};
+
+// ✅ GOOD - Import the interface
+import { MicroserviceResponse } from './types';
+
+const response: MicroserviceResponse = {
+  success: true,
+  data: { message: 'test' }
+};
+```
+
+### 4. ESLint Disable Comments
+For test files where certain patterns are necessary, use targeted ESLint disable comments:
+
+```typescript
+// For unsafe member access in tests
+// eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+delete (invalidData as any).workspaceId;
+
+// For entire test files with many type assertions
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+```
+
+### 5. Proper Type Assertions
+Use type assertions correctly and sparingly:
+
+```typescript
+// ❌ BAD - Overly broad assertion
+const data = response as any;
+
+// ✅ GOOD - Specific assertion for known structure
+const data = response as { id: string; name: string };
+
+// ✅ BETTER - Use proper typing
+interface ResponseData {
+  id: string;
+  name: string;
+}
+const data = response as ResponseData;
+```
+
+### 6. Array and Object Handling
+Handle arrays and objects with proper type safety:
+
+```typescript
+// ❌ BAD - Potential undefined access
+const errorProperties = errors.map(error => error.property);
+
+// ✅ GOOD - Consistent arrow function style
+const errorProperties = errors.map((error) => error.property);
+
+// ✅ GOOD - With null checking
+const errorProperties = errors?.map((error) => error.property) ?? [];
+```
+
+### 7. Async/Await Patterns
+Handle promises correctly to avoid floating promises:
+
+```typescript
+// ❌ BAD - Floating promise
+service.doSomething();
+
+// ✅ GOOD - Await the promise
+await service.doSomething();
+
+// ✅ GOOD - Explicitly ignore if intentional
+void service.doSomething();
+```
+
+### 8. Configuration and Environment Variables
+Handle configuration safely:
+
+```typescript
+// ❌ BAD - Potential undefined
+const port = process.env.PORT;
+
+// ✅ GOOD - With default value
+const port = process.env.PORT || 3000;
+
+// ✅ BETTER - With proper typing
+const port = parseInt(process.env.PORT || '3000', 10);
+```
+
+## Test-Specific Patterns
+
+### 9. Mock Type Safety
+Ensure mocks are properly typed:
+
+```typescript
+// ❌ BAD - Untyped mock
+const mockService = {
+  method: jest.fn()
+};
+
+// ✅ GOOD - Properly typed mock
+const mockService: jest.Mocked<ServiceType> = {
+  method: jest.fn(),
+  anotherMethod: jest.fn(),
+};
+```
+
+### 10. Validation Test Patterns
+For class-validator tests, use consistent patterns:
+
+```typescript
+// ✅ GOOD - Consistent test structure
+it('should fail validation when field is missing', async () => {
+  // Arrange
+  const invalidData = { ...validData };
+  delete (invalidData as any).requiredField;
+  const dto = plainToClass(DtoClass, invalidData);
+
+  // Act
+  const errors = await validate(dto);
+
+  // Assert
+  expect(errors).toHaveLength(1);
+  expect(errors[0].property).toBe('requiredField');
+  expect(errors[0].constraints).toHaveProperty('isNotEmpty');
+});
+```
+
+## Common ESLint Rules to Address
+
+### 11. Disable Rules Strategically
+Add these to your ESLint config for test files:
+
+```javascript
+// In eslint.config.mjs
+{
+  files: ['**/*.spec.ts', '**/*.test.ts'],
+  rules: {
+    '@typescript-eslint/no-unsafe-member-access': 'off',
+    '@typescript-eslint/no-explicit-any': 'off',
+    '@typescript-eslint/no-unsafe-assignment': 'off',
+  },
+}
+```
+
+### 12. Prettier Integration
+Ensure consistent formatting:
+
+```typescript
+// ✅ GOOD - Multi-line object formatting
+expect(dto.metadata?.custom_metadata).toEqual({
+  environment: 'production',
+});
+
+// ✅ GOOD - Long expression formatting
+expect(
+  'error' in successResponse ? successResponse.error : undefined,
+).toBeUndefined();
+```
+
+## File-Level Patterns
+
+### 13. Test File Structure
+Organize test files consistently:
+
+```typescript
+import { validate } from 'class-validator';
+import { plainToClass } from 'class-transformer';
+import {
+  DtoClass,
+  InterfaceType,
+  // ... other imports
+} from './module';
+
+describe('Module Tests', () => {
+  describe('DtoClass', () => {
+    const validData = {
+      // ... test data
+    };
+
+    it('should validate successfully', async () => {
+      // Test implementation
+    });
+  });
+});
+```
+
+### 14. Error Handling Patterns
+Handle errors consistently:
+
+```typescript
+// ✅ GOOD - Proper error testing
+it('should handle service errors', async () => {
+  // Arrange
+  const error = new Error('Service failed');
+  mockService.method.mockRejectedValue(error);
+
+  // Act & Assert
+  await expect(service.performAction()).rejects.toThrow('Service failed');
+});
+```
+
+## Quick Reference
+
+### Common Fixes
+1. **Delete operator error**: Use `delete (obj as any).property`
+2. **Unsafe member access**: Add `// eslint-disable-next-line @typescript-eslint/no-unsafe-member-access`
+3. **Missing interface**: Import and use proper typing
+4. **Floating promises**: Add `await` or `void`
+5. **Arrow function consistency**: Use `(param) => {}` format
+
+### When to Use Type Assertions
+- Test scenarios where you need to manipulate objects
+- Working with external APIs with unknown structure
+- Migrating JavaScript code to TypeScript
+- **Never** use `as any` in production code unless absolutely necessary
+
+Remember: These patterns are primarily for test files and development scenarios. Production code should maintain strict type safety.

@@ -1,0 +1,736 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Distributed Systems Rules
+
+## Overview
+This NestJS API is designed as a microservice within a distributed system architecture. These rules ensure proper design patterns, communication protocols, and resilience mechanisms are implemented.
+
+## Microservice Design Principles
+
+### Single Responsibility Principle
+Each service should have one clear business domain:
+
+```typescript
+// Good - Focused on user management
+@Module({
+  imports: [CqrsModule],
+  controllers: [UserController],
+  providers: [UserService, ...UserHandlers],
+})
+export class UserModule {}
+
+// Bad - Mixed responsibilities
+@Module({
+  controllers: [UserController, OrderController, PaymentController],
+  // Too many unrelated concerns
+})
+export class MixedModule {}
+```
+
+### Service Autonomy
+Services should be independently deployable and scalable:
+
+```typescript
+// Independent configuration
+@Injectable()
+export class ConfigService {
+  get databaseUrl(): string {
+    return process.env.USER_SERVICE_DB_URL;
+  }
+  
+  get servicePort(): number {
+    return parseInt(process.env.USER_SERVICE_PORT) || 3001;
+  }
+}
+```
+
+### Bounded Context
+Define clear boundaries between services:
+
+```typescript
+// User service domain
+export interface User {
+  id: string;
+  email: string;
+  profile: UserProfile;
+}
+
+// Don't include order details in user service
+// Orders belong to order service domain
+```
+
+## Inter-Service Communication
+
+### Synchronous Communication (HTTP/REST)
+Use for real-time queries and immediate responses:
+
+```typescript
+@Injectable()
+export class ExternalUserService {
+  constructor(private readonly httpService: HttpService) {}
+
+  async getUserProfile(userId: string): Promise<UserProfile> {
+    try {
+      const response = await this.httpService
+        .get(`${this.userServiceUrl}/users/${userId}`)
+        .pipe(timeout(5000)) // 5 second timeout
+        .toPromise();
+      
+      return response.data;
+    } catch (error) {
+      if (error.code === 'TIMEOUT') {
+        throw new ServiceUnavailableException('User service timeout');
+      }
+      throw new ServiceUnavailableException('User service unavailable');
+    }
+  }
+}
+```
+
+### Asynchronous Communication (Events/Messages)
+Use for eventual consistency and decoupled operations:
+
+```typescript
+// Event publishing
+@Injectable()
+export class UserService {
+  constructor(private readonly eventBus: EventBus) {}
+
+  async createUser(userData: CreateUserDto): Promise<User> {
+    const user = await this.userRepository.create(userData);
+    
+    // Publish event for other services
+    await this.eventBus.publish(
+      new UserCreatedEvent(user.id, user.email, user.createdAt)
+    );
+    
+    return user;
+  }
+}
+
+// Event handling in another service
+@EventsHandler(UserCreatedEvent)
+export class UserCreatedHandler implements IEventHandler<UserCreatedEvent> {
+  async handle(event: UserCreatedEvent): Promise<void> {
+    // Create user profile in profile service
+    await this.profileService.createProfile(event.userId);
+  }
+}
+```
+
+### Circuit Breaker Pattern
+Implement circuit breakers for external service calls:
+
+```typescript
+@Injectable()
+export class CircuitBreakerService {
+  private circuitBreakers = new Map<string, any>();
+
+  async callWithCircuitBreaker<T>(
+    serviceName: string,
+    operation: () => Promise<T>,
+    fallback?: () => Promise<T>
+  ): Promise<T> {
+    const breaker = this.getCircuitBreaker(serviceName);
+    
+    try {
+      return await breaker.fire(operation);
+    } catch (error) {
+      if (fallback) {
+        return await fallback();
+      }
+      throw error;
+    }
+  }
+
+  private getCircuitBreaker(serviceName: string) {
+    if (!this.circuitBreakers.has(serviceName)) {
+      const breaker = new CircuitBreaker(async () => {}, {
+        timeout: 5000,
+        errorThresholdPercentage: 50,
+        resetTimeout: 30000,
+      });
+      this.circuitBreakers.set(serviceName, breaker);
+    }
+    return this.circuitBreakers.get(serviceName);
+  }
+}
+```
+
+## Data Management
+
+### Database Per Service
+Each service owns its data:
+
+```typescript
+// User service database configuration
+@Module({
+  imports: [
+    DrizzleModule.forRoot({
+      connectionString: process.env.USER_SERVICE_DB_URL,
+      schema: userSchema,
+    }),
+  ],
+})
+export class UserDatabaseModule {}
+
+// Order service has its own database
+@Module({
+  imports: [
+    DrizzleModule.forRoot({
+      connectionString: process.env.ORDER_SERVICE_DB_URL,
+      schema: orderSchema,
+    }),
+  ],
+})
+export class OrderDatabaseModule {}
+```
+
+### Event Sourcing
+Implement event sourcing for critical business events:
+
+```typescript
+@Injectable()
+export class EventStore {
+  async saveEvent(event: DomainEvent): Promise<void> {
+    await this.eventRepository.save({
+      aggregateId: event.aggregateId,
+      eventType: event.constructor.name,
+      eventData: JSON.stringify(event),
+      version: event.version,
+      timestamp: new Date(),
+    });
+  }
+
+  async getEvents(aggregateId: string): Promise<DomainEvent[]> {
+    const events = await this.eventRepository.findByAggregateId(aggregateId);
+    return events.map(e => this.deserializeEvent(e));
+  }
+}
+```
+
+### Saga Pattern
+Implement sagas for distributed transactions:
+
+```typescript
+@Saga()
+export class OrderProcessingSaga {
+  @SagaStart()
+  orderCreated = (events$: Observable<any>) => {
+    return events$.pipe(
+      ofType(OrderCreatedEvent),
+      map(event => new ReserveInventoryCommand(event.orderId, event.items))
+    );
+  };
+
+  @SagaStart()
+  inventoryReserved = (events$: Observable<any>) => {
+    return events$.pipe(
+      ofType(InventoryReservedEvent),
+      map(event => new ProcessPaymentCommand(event.orderId, event.amount))
+    );
+  };
+
+  @SagaStart()
+  paymentFailed = (events$: Observable<any>) => {
+    return events$.pipe(
+      ofType(PaymentFailedEvent),
+      map(event => new ReleaseInventoryCommand(event.orderId))
+    );
+  };
+}
+```
+
+## Service Discovery & Configuration
+
+### Health Check Endpoints
+Implement comprehensive health checks:
+
+```typescript
+@Controller('health')
+export class HealthController {
+  constructor(
+    private readonly databaseService: DatabaseService,
+    private readonly redisService: RedisService,
+  ) {}
+
+  @Get()
+  async check(): Promise<HealthStatus> {
+    const checks = await Promise.allSettled([
+      this.checkDatabase(),
+      this.checkRedis(),
+      this.checkExternalServices(),
+    ]);
+
+    const status = checks.every(check => check.status === 'fulfilled')
+      ? 'healthy'
+      : 'unhealthy';
+
+    return {
+      status,
+      timestamp: new Date().toISOString(),
+      service: 'user-service',
+      version: process.env.SERVICE_VERSION,
+      checks: {
+        database: checks[0].status === 'fulfilled',
+        redis: checks[1].status === 'fulfilled',
+        external: checks[2].status === 'fulfilled',
+      },
+    };
+  }
+
+  private async checkDatabase(): Promise<boolean> {
+    try {
+      await this.databaseService.query('SELECT 1');
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+```
+
+### Graceful Shutdown
+Implement proper shutdown procedures:
+
+```typescript
+// In main.ts
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+  
+  // Enable graceful shutdown
+  app.enableShutdownHooks();
+  
+  // Handle shutdown signals
+  process.on('SIGTERM', async () => {
+    console.log('SIGTERM received, shutting down gracefully');
+    await app.close();
+  });
+
+  process.on('SIGINT', async () => {
+    console.log('SIGINT received, shutting down gracefully');
+    await app.close();
+  });
+
+  await app.listen(3000);
+}
+
+// In services
+@Injectable()
+export class DatabaseService implements OnApplicationShutdown {
+  async onApplicationShutdown(signal?: string) {
+    console.log(`Closing database connections due to ${signal}`);
+    await this.closeConnections();
+  }
+}
+```
+
+## Monitoring & Observability
+
+### Correlation IDs
+Implement request correlation across services:
+
+```typescript
+@Injectable()
+export class CorrelationInterceptor implements NestInterceptor {
+  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
+    const request = context.switchToHttp().getRequest();
+    const correlationId = request.headers['x-correlation-id'] || uuidv4();
+    
+    // Add to request context
+    request.correlationId = correlationId;
+    
+    // Add to response headers
+    const response = context.switchToHttp().getResponse();
+    response.setHeader('x-correlation-id', correlationId);
+    
+    return next.handle();
+  }
+}
+
+// Use in HTTP client calls
+@Injectable()
+export class ExternalService {
+  async callExternalService(data: any, correlationId: string) {
+    return this.httpService.post('/api/endpoint', data, {
+      headers: {
+        'x-correlation-id': correlationId,
+      },
+    }).toPromise();
+  }
+}
+```
+
+### Structured Logging
+Implement structured logging with correlation:
+
+```typescript
+@Injectable()
+export class LoggerService {
+  private logger = new Logger(LoggerService.name);
+
+  log(message: string, context?: any, correlationId?: string) {
+    const logEntry = {
+      timestamp: new Date().toISOString(),
+      level: 'info',
+      message,
+      service: 'user-service',
+      correlationId,
+      ...context,
+    };
+    
+    this.logger.log(JSON.stringify(logEntry));
+  }
+
+  error(message: string, error: Error, correlationId?: string) {
+    const logEntry = {
+      timestamp: new Date().toISOString(),
+      level: 'error',
+      message,
+      service: 'user-service',
+      correlationId,
+      error: {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+      },
+    };
+    
+    this.logger.error(JSON.stringify(logEntry));
+  }
+}
+```
+
+### Distributed Tracing
+Implement distributed tracing:
+
+```typescript
+@Injectable()
+export class TracingService {
+  private tracer = trace.getTracer('user-service');
+
+  async traceOperation<T>(
+    operationName: string,
+    operation: (span: Span) => Promise<T>
+  ): Promise<T> {
+    const span = this.tracer.startSpan(operationName);
+    
+    try {
+      const result = await operation(span);
+      span.setStatus({ code: SpanStatusCode.OK });
+      return result;
+    } catch (error) {
+      span.setStatus({
+        code: SpanStatusCode.ERROR,
+        message: error.message,
+      });
+      throw error;
+    } finally {
+      span.end();
+    }
+  }
+}
+```
+
+## Resilience Patterns
+
+### Retry with Exponential Backoff
+Implement retry mechanisms:
+
+```typescript
+@Injectable()
+export class RetryService {
+  async retryWithBackoff<T>(
+    operation: () => Promise<T>,
+    maxRetries: number = 3,
+    baseDelay: number = 1000
+  ): Promise<T> {
+    let lastError: Error;
+    
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        return await operation();
+      } catch (error) {
+        lastError = error;
+        
+        if (attempt === maxRetries) {
+          break;
+        }
+        
+        const delay = baseDelay * Math.pow(2, attempt);
+        await this.sleep(delay);
+      }
+    }
+    
+    throw lastError;
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+}
+```
+
+### Bulkhead Pattern
+Isolate resources to prevent cascade failures:
+
+```typescript
+@Injectable()
+export class ResourcePool {
+  private pools = new Map<string, any>();
+
+  getPool(name: string, config: PoolConfig) {
+    if (!this.pools.has(name)) {
+      const pool = new Pool({
+        min: config.min,
+        max: config.max,
+        acquireTimeoutMillis: config.timeout,
+      });
+      this.pools.set(name, pool);
+    }
+    return this.pools.get(name);
+  }
+}
+
+// Usage
+@Injectable()
+export class DatabaseService {
+  constructor(private resourcePool: ResourcePool) {}
+
+  async query(sql: string) {
+    const pool = this.resourcePool.getPool('database', {
+      min: 2,
+      max: 10,
+      timeout: 5000,
+    });
+    
+    const connection = await pool.acquire();
+    try {
+      return await connection.query(sql);
+    } finally {
+      pool.release(connection);
+    }
+  }
+}
+```
+
+## Security in Distributed Systems
+
+### Service-to-Service Authentication
+Implement mutual TLS or JWT for service communication:
+
+```typescript
+@Injectable()
+export class ServiceAuthService {
+  async getServiceToken(): Promise<string> {
+    const payload = {
+      service: 'user-service',
+      iat: Math.floor(Date.now() / 1000),
+      exp: Math.floor(Date.now() / 1000) + 300, // 5 minutes
+    };
+    
+    return jwt.sign(payload, process.env.SERVICE_SECRET);
+  }
+
+  async validateServiceToken(token: string): Promise<boolean> {
+    try {
+      const payload = jwt.verify(token, process.env.SERVICE_SECRET);
+      return payload.service !== undefined;
+    } catch {
+      return false;
+    }
+  }
+}
+```
+
+### API Gateway Integration
+Design for API gateway patterns:
+
+```typescript
+@Controller('api/v1/users')
+export class UserController {
+  // Gateway will handle rate limiting, authentication
+  @Get(':id')
+  @ApiOperation({ summary: 'Get user by ID' })
+  @ApiHeader({
+    name: 'x-api-key',
+    description: 'API Gateway key',
+    required: true,
+  })
+  async getUser(@Param('id') id: string) {
+    return this.userService.findById(id);
+  }
+}
+```
+
+## Testing Distributed Systems
+
+### Contract Testing
+Implement consumer-driven contract testing:
+
+```typescript
+// Provider test (User Service)
+describe('User Service Contract', () => {
+  it('should provide user data in expected format', async () => {
+    const user = await userService.findById('123');
+    
+    expect(user).toMatchSchema({
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        email: { type: 'string', format: 'email' },
+        profile: {
+          type: 'object',
+          properties: {
+            firstName: { type: 'string' },
+            lastName: { type: 'string' },
+          },
+        },
+      },
+      required: ['id', 'email'],
+    });
+  });
+});
+
+// Consumer test (Order Service)
+describe('User Service Consumer', () => {
+  it('should handle user service response', async () => {
+    const mockUser = {
+      id: '123',
+      email: 'test@example.com',
+      profile: {
+        firstName: 'John',
+        lastName: 'Doe',
+      },
+    };
+    
+    jest.spyOn(userService, 'getUser').mockResolvedValue(mockUser);
+    
+    const order = await orderService.createOrder({
+      userId: '123',
+      items: [{ id: '1', quantity: 2 }],
+    });
+    
+    expect(order.userEmail).toBe('test@example.com');
+  });
+});
+```
+
+### Chaos Engineering
+Test system resilience:
+
+```typescript
+@Injectable()
+export class ChaosService {
+  async introduceLatency(probability: number = 0.1) {
+    if (Math.random() < probability) {
+      const delay = Math.random() * 5000; // 0-5 seconds
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+
+  async introduceFailure(probability: number = 0.05) {
+    if (Math.random() < probability) {
+      throw new ServiceUnavailableException('Chaos monkey struck!');
+    }
+  }
+}
+
+// Use in services during testing
+@Injectable()
+export class UserService {
+  async findById(id: string): Promise<User> {
+    if (process.env.NODE_ENV === 'test') {
+      await this.chaosService.introduceLatency();
+      await this.chaosService.introduceFailure();
+    }
+    
+    return this.userRepository.findById(id);
+  }
+}
+```
+
+## Common Anti-Patterns
+
+### Distributed Monolith
+Avoid creating tightly coupled services:
+
+```typescript
+// Bad - Tight coupling
+export class OrderService {
+  async createOrder(orderData: CreateOrderDto) {
+    // Direct database access to user service data
+    const user = await this.userRepository.findById(orderData.userId);
+    const inventory = await this.inventoryRepository.checkStock(orderData.items);
+    
+    // Synchronous calls to multiple services
+    await this.paymentService.processPayment(orderData.payment);
+    await this.shippingService.scheduleShipping(orderData.shipping);
+  }
+}
+
+// Good - Loose coupling with events
+export class OrderService {
+  async createOrder(orderData: CreateOrderDto) {
+    const order = await this.orderRepository.create(orderData);
+    
+    // Publish event for other services to react
+    await this.eventBus.publish(new OrderCreatedEvent(order));
+    
+    return order;
+  }
+}
+```
+
+### Shared Database
+Avoid sharing databases between services:
+
+```typescript
+// Bad - Shared database access
+export class UserService {
+  // Accessing order data directly
+  async getUserWithOrders(userId: string) {
+    const user = await this.userRepository.findById(userId);
+    const orders = await this.orderRepository.findByUserId(userId); // Wrong!
+    return { ...user, orders };
+  }
+}
+
+// Good - Service communication
+export class UserService {
+  async getUserWithOrders(userId: string) {
+    const user = await this.userRepository.findById(userId);
+    const orders = await this.orderService.getOrdersByUserId(userId); // Correct!
+    return { ...user, orders };
+  }
+}
+```
+
+### Chatty Communication
+Avoid excessive inter-service communication:
+
+```typescript
+// Bad - Multiple service calls
+export class OrderService {
+  async createOrder(orderData: CreateOrderDto) {
+    for (const item of orderData.items) {
+      const product = await this.productService.getProduct(item.productId);
+      const inventory = await this.inventoryService.checkStock(item.productId);
+      // Multiple network calls
+    }
+  }
+}
+
+// Good - Batch operations
+export class OrderService {
+  async createOrder(orderData: CreateOrderDto) {
+    const productIds = orderData.items.map(item => item.productId);
+    const products = await this.productService.getProducts(productIds);
+    const inventory = await this.inventoryService.checkStockBatch(productIds);
+    // Single batch calls
+  }
+}
+``` 

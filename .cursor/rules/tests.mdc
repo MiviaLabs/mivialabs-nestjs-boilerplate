@@ -1,0 +1,395 @@
+---
+description: 
+globs: *.spec.ts,*.e2e-spec.ts
+alwaysApply: false
+---
+# Unit Testing Rules for Reximo
+
+## Overview
+Unit tests must be completely isolated, fast, and deterministic.They should test a single unit of code in isolation without any external dependencies.
+
+## Core Principles
+
+### 1. Complete Isolation
+  - ** Mock ALL external dependencies ** - databases, APIs, file systems, network calls, other services
+  - ** Mock ALL injected dependencies ** - other services, repositories, clients
+  - ** Mock ALL static methods ** and global functions
+  - ** No real I / O operations ** - no actual file reads, network requests, database queries
+  - ** No environment dependencies ** - tests should not depend on environment variables or external configuration
+
+### 2. Dependency Injection Mocking
+  ```typescript
+// GOOD - All dependencies are mocked
+describe('UserService', () => {
+  let service: UserService;
+  let mockUserRepository: jest.Mocked<UserRepository>;
+  let mockEmailService: jest.Mocked<EmailService>;
+  let mockConfigService: jest.Mocked<ConfigService>;
+
+  beforeEach(async () => {
+    const mockUserRepo = {
+      findById: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn(),
+    };
+
+    const mockEmail = {
+      sendWelcomeEmail: jest.fn(),
+      sendPasswordReset: jest.fn(),
+    };
+
+    const mockConfig = {
+      get: jest.fn(),
+      getOrThrow: jest.fn(),
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        UserService,
+        { provide: UserRepository, useValue: mockUserRepo },
+        { provide: EmailService, useValue: mockEmail },
+        { provide: ConfigService, useValue: mockConfig },
+      ],
+    }).compile();
+
+    service = module.get<UserService>(UserService);
+    mockUserRepository = module.get(UserRepository);
+    mockEmailService = module.get(EmailService);
+    mockConfigService = module.get(ConfigService);
+  });
+
+  it('should create user successfully', async () => {
+    // Arrange
+    const userData = { email: 'test@example.com', name: 'John Doe' };
+    const expectedUser = { id: '1', ...userData };
+    
+    mockUserRepository.findByEmail.mockResolvedValue(null);
+    mockUserRepository.create.mockResolvedValue(expectedUser);
+    mockEmailService.sendWelcomeEmail.mockResolvedValue(undefined);
+
+    // Act
+    const result = await service.createUser(userData);
+
+    // Assert
+    expect(result).toEqual(expectedUser);
+    expect(mockUserRepository.create).toHaveBeenCalledWith(userData);
+    expect(mockEmailService.sendWelcomeEmail).toHaveBeenCalledWith(userData.email);
+  });
+});
+```
+
+### 3. Configuration Service Mocking
+  ```typescript
+// GOOD - ConfigService is properly mocked
+const createMockConfigService = (values: Record<string, unknown> = {}) => ({
+  get: jest.fn((key: string, defaultValue?: unknown) => 
+    key in values ? values[key] : defaultValue
+  ),
+  getOrThrow: jest.fn((key: string) => {
+    if (!(key in values)) {
+      throw new Error(`Configuration key ${ key } not found`);
+    }
+    return values[key];
+  }),
+});
+
+describe('VaultConfigService', () => {
+  let service: VaultConfigService;
+  let mockConfigService: jest.Mocked<ConfigService>;
+
+  beforeEach(async () => {
+    const configValues = {
+      VAULT_URL: 'http://test-vault:8200',
+      VAULT_ROLE_ID: 'test-role-id',
+      VAULT_SECRET_ID: 'test-secret-id',
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        VaultConfigService,
+        { provide: ConfigService, useValue: createMockConfigService(configValues) },
+      ],
+    }).compile();
+
+    service = module.get<VaultConfigService>(VaultConfigService);
+    mockConfigService = module.get(ConfigService);
+  });
+
+  it('should return vault URL from config', () => {
+    expect(service.vaultUrl).toBe('http://test-vault:8200');
+    expect(mockConfigService.get).toHaveBeenCalledWith('VAULT_URL', 'http://localhost:8200');
+  });
+});
+```
+
+### 4. HTTP Client Mocking
+  ```typescript
+// GOOD - HTTP calls are mocked
+describe('VaultService', () => {
+  let service: VaultService;
+  let mockConfigService: jest.Mocked<VaultConfigService>;
+
+  beforeEach(async () => {
+    const mockConfig = {
+      vaultUrl: 'http://test-vault:8200',
+      vaultRoleId: 'test-role-id',
+      vaultSecretId: 'test-secret-id',
+      requestTimeout: 5000,
+    };
+
+    // Mock global fetch
+    global.fetch = jest.fn();
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        VaultService,
+        { provide: VaultConfigService, useValue: mockConfig },
+      ],
+    }).compile();
+
+    service = module.get<VaultService>(VaultService);
+    mockConfigService = module.get(VaultConfigService);
+  });
+
+  it('should authenticate successfully', async () => {
+    const mockResponse = {
+      ok: true,
+      json: jest.fn().mockResolvedValue({
+        auth: {
+          client_token: 'test-token',
+          lease_duration: 3600,
+        },
+      }),
+    };
+
+    (global.fetch as jest.Mock).mockResolvedValue(mockResponse);
+
+    await service.authenticate();
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://test-vault:8200/v1/auth/approle/login',
+      expect.objectContaining({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+  });
+});
+```
+
+### 5. Logger Mocking
+  ```typescript
+// GOOD - Logger is mocked to avoid console output during tests
+describe('VaultService', () => {
+  let service: VaultService;
+  let mockLogger: jest.Mocked<Logger>;
+
+  beforeEach(async () => {
+    const mockLog = {
+      log: jest.fn(),
+      error: jest.fn(),
+      warn: jest.fn(),
+      debug: jest.fn(),
+      verbose: jest.fn(),
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        VaultService,
+        { provide: Logger, useValue: mockLog },
+        // ... other mocked dependencies
+      ],
+    }).compile();
+
+    service = module.get<VaultService>(VaultService);
+    mockLogger = module.get(Logger);
+  });
+
+  it('should log error when operation fails', async () => {
+    // Test that appropriate logging occurs
+    await expect(service.failingOperation()).rejects.toThrow();
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      expect.stringContaining('Operation failed'),
+      expect.any(Error)
+    );
+  });
+});
+```
+
+## Test Structure Standards
+
+### 6. AAA Pattern(Arrange, Act, Assert)
+  ```typescript
+it('should calculate total price with tax', () => {
+  // Arrange
+  const items = [
+    { price: 100, quantity: 2 },
+    { price: 50, quantity: 1 },
+  ];
+  const taxRate = 0.1;
+  const expected = 275; // (200 + 50) * 1.1
+
+  // Act
+  const result = service.calculateTotal(items, taxRate);
+
+  // Assert
+  expect(result).toBe(expected);
+});
+```
+
+### 7. Error Testing
+  ```typescript
+it('should throw error when user not found', async () => {
+  mockRepository.findById.mockResolvedValue(null);
+
+  await expect(service.updateUser('999', { name: 'New Name' }))
+    .rejects
+    .toThrow('User not found');
+
+  expect(mockRepository.findById).toHaveBeenCalledWith('999');
+  expect(mockRepository.update).not.toHaveBeenCalled();
+});
+```
+
+## Anti - Patterns to Avoid
+
+### 8. What NOT to do
+  ```typescript
+// BAD - Real dependencies, actual API calls
+describe('VaultService', () => {
+  let service: VaultService;
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        VaultService,
+        VaultConfigService, // Real service - BAD!
+        ConfigService,      // Real service - BAD!
+      ],
+    }).compile();
+
+    service = module.get<VaultService>(VaultService);
+  });
+
+  it('should authenticate with vault', async () => {
+    // This will make real HTTP calls - BAD!
+    await service.authenticate();
+  });
+});
+
+// BAD - Testing implementation details
+it('should call private method', () => {
+  // Don't test private methods directly
+  expect((service as any).privateMethod).toHaveBeenCalled();
+});
+
+// BAD - Testing multiple units
+it('should create user and send email and log event', async () => {
+  // This tests too many things at once
+  const result = await service.createUserWithEmailAndLogging(userData);
+  // Multiple assertions for different concerns
+});
+```
+
+### 9. Environment Independence
+  ```typescript
+// BAD - Depends on environment variables
+it('should use production config', () => {
+  process.env.NODE_ENV = 'production'; // BAD - modifying global state
+  expect(service.isProduction()).toBe(true);
+});
+
+// GOOD - Mock the config service
+it('should use production config', () => {
+  mockConfigService.get.mockReturnValue('production');
+  expect(service.isProduction()).toBe(true);
+});
+```
+
+## Performance Guidelines
+
+### 10. Fast Tests
+  - Tests should run in ** milliseconds **, not seconds
+    - No real I / O operations(network, file system, database)
+      - No`setTimeout` or`setInterval` - mock timers instead
+        - Use`jest.useFakeTimers()` for time - dependent code
+
+### 11. Deterministic Tests
+  - Tests should always produce the same result
+    - No random data without seeding
+      - No dependency on current date / time - mock Date
+        - No flaky tests due to timing issues
+
+## Coverage Guidelines
+
+### 12. What to Test
+  - ** Public methods ** and their behavior
+    - ** Error conditions ** and edge cases
+      - ** Business logic ** and calculations
+        - ** Conditional branches ** and different code paths
+          - ** Integration points ** (mocked)
+
+### 13. What NOT to Test
+  - ** Private methods ** directly(test through public interface)
+    - ** Third - party libraries ** (assume they work)
+- ** Getters / setters ** without logic
+  - ** Configuration objects ** without behavior
+    - ** Trivial code ** (simple assignments)
+
+## Mock Verification
+
+### 14. Verify Mock Interactions
+  ```typescript
+it('should call repository with correct parameters', async () => {
+  await service.createUser(userData);
+
+  expect(mockRepository.create).toHaveBeenCalledTimes(1);
+  expect(mockRepository.create).toHaveBeenCalledWith(userData);
+  expect(mockRepository.create).toHaveBeenCalledWith(
+    expect.objectContaining({
+      email: userData.email,
+      name: userData.name,
+    })
+  );
+});
+```
+
+### 15. Reset Mocks
+  ```typescript
+beforeEach(() => {
+  jest.clearAllMocks(); // Clear call history
+});
+
+afterEach(() => {
+  jest.resetAllMocks(); // Reset to original implementation
+});
+```
+
+## Integration vs Unit Tests
+
+### 16. When to Write Integration Tests
+  - Testing ** actual API endpoints ** end - to - end
+    - Testing ** database operations ** with real database
+      - Testing ** external service integrations **
+- Testing ** complete user workflows **
+
+### 17. File Naming Conventions
+  - Unit tests: `*.spec.ts`
+    - Integration tests: `*.integration.spec.ts` or in `test/` directory
+      - E2E tests: `*.e2e-spec.ts`
+
+## Common Mistakes to Avoid
+
+1. ** Testing implementation instead of behavior **
+  2. ** Not mocking external dependencies **
+    3. ** Writing tests that depend on external services **
+      4. ** Sharing state between tests **
+        5. ** Testing multiple units in one test **
+          6. ** Not testing error conditions **
+            7. ** Overly complex test setup **
+              8. ** Not using descriptive test names**
+                9. ** Testing trivial code **
+                  10. ** Ignoring test performance **
+
+                    Remember: ** Unit tests should be FAST, ISOLATED, REPEATABLE, SELF - VALIDATING, and TIMELY(FIRST) **. 

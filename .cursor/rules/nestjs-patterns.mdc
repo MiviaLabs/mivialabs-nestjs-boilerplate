@@ -1,0 +1,496 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# NestJS & CQRS Development Patterns
+
+## Overview
+This rule provides patterns for writing clean, lint-free NestJS code with CQRS architecture, focusing on avoiding common TypeScript and ESLint issues.
+
+## Core NestJS Patterns
+
+### 1. Dependency Injection
+Always use proper dependency injection patterns:
+
+```typescript
+// ✅ GOOD - Proper constructor injection
+@Injectable()
+export class UserService {
+  constructor(
+    private readonly userRepository: UserRepository,
+    private readonly eventBus: EventBus,
+    private readonly logger: Logger,
+  ) {}
+}
+
+// ❌ BAD - Missing readonly, improper access modifiers
+@Injectable()
+export class UserService {
+  constructor(
+    private userRepository: UserRepository,
+    public eventBus: EventBus,
+  ) {}
+}
+```
+
+### 2. Controller Patterns
+Structure controllers consistently:
+
+```typescript
+// ✅ GOOD - Proper controller structure
+@Controller('users')
+@ApiTags('Users')
+export class UserController {
+  constructor(
+    private readonly commandBus: CommandBus,
+    private readonly queryBus: QueryBus,
+  ) {}
+
+  @Post()
+  @ApiOperation({ summary: 'Create user' })
+  @ApiResponse({ status: 201, type: UserResponseDto })
+  async createUser(@Body() dto: CreateUserDto): Promise<UserResponseDto> {
+    const command = new CreateUserCommand(dto);
+    return this.commandBus.execute(command);
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Get user by ID' })
+  @ApiResponse({ status: 200, type: UserResponseDto })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  async getUser(@Param('id') id: string): Promise<UserResponseDto> {
+    const query = new GetUserByIdQuery(id);
+    const user = await this.queryBus.execute(query);
+    
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    
+    return user;
+  }
+}
+```
+
+### 3. DTO Validation Patterns
+Create robust DTOs with proper validation:
+
+```typescript
+// ✅ GOOD - Comprehensive DTO with validation
+export class CreateUserDto {
+  @ApiProperty({ description: 'User email', example: 'user@example.com' })
+  @IsEmail()
+  @IsNotEmpty()
+  email: string;
+
+  @ApiProperty({ description: 'User name', example: 'John Doe' })
+  @IsString()
+  @IsNotEmpty()
+  @Length(2, 50)
+  name: string;
+
+  @ApiPropertyOptional({ description: 'User age', example: 25 })
+  @IsOptional()
+  @IsNumber()
+  @Min(18)
+  @Max(120)
+  age?: number;
+}
+```
+
+## CQRS Patterns
+
+### 4. Command Structure
+Define commands with proper typing:
+
+```typescript
+// ✅ GOOD - Immutable command with proper typing
+export class CreateUserCommand implements ICommand {
+  constructor(
+    public readonly email: string,
+    public readonly name: string,
+    public readonly age?: number,
+  ) {}
+}
+
+// ✅ GOOD - Command handler with proper error handling
+@Injectable()
+@CommandHandler(CreateUserCommand)
+export class CreateUserHandler implements ICommandHandler<CreateUserCommand> {
+  constructor(
+    private readonly userRepository: UserRepository,
+    private readonly eventBus: EventBus,
+  ) {}
+
+  async execute(command: CreateUserCommand): Promise<User> {
+    const { email, name, age } = command;
+
+    try {
+      // Business logic
+      const existingUser = await this.userRepository.findByEmail(email);
+      if (existingUser) {
+        throw new ConflictException('User already exists');
+      }
+
+      const user = await this.userRepository.create({ email, name, age });
+
+      // Publish domain event
+      await this.eventBus.publish(new UserCreatedEvent(user.id, user.email));
+
+      return user;
+    } catch (error) {
+      if (error instanceof ConflictException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to create user');
+    }
+  }
+}
+```
+
+### 5. Query Patterns
+Structure queries for optimal performance:
+
+```typescript
+// ✅ GOOD - Query with pagination and filtering
+export class GetUsersQuery implements IQuery {
+  constructor(
+    public readonly page: number = 1,
+    public readonly limit: number = 10,
+    public readonly search?: string,
+    public readonly sortBy?: string,
+    public readonly sortOrder: 'ASC' | 'DESC' = 'ASC',
+  ) {}
+}
+
+// ✅ GOOD - Query handler with proper response typing
+@Injectable()
+@QueryHandler(GetUsersQuery)
+export class GetUsersHandler implements IQueryHandler<GetUsersQuery> {
+  constructor(private readonly userRepository: UserRepository) {}
+
+  async execute(query: GetUsersQuery): Promise<PaginatedResult<User>> {
+    const { page, limit, search, sortBy, sortOrder } = query;
+    
+    return this.userRepository.findMany({
+      page,
+      limit,
+      search,
+      sortBy,
+      sortOrder,
+    });
+  }
+}
+```
+
+### 6. Event Handling
+Implement robust event patterns:
+
+```typescript
+// ✅ GOOD - Immutable event with timestamp
+export class UserCreatedEvent implements IEvent {
+  constructor(
+    public readonly userId: string,
+    public readonly email: string,
+    public readonly timestamp: Date = new Date(),
+  ) {}
+}
+
+// ✅ GOOD - Resilient event handler
+@Injectable()
+@EventsHandler(UserCreatedEvent)
+export class UserCreatedHandler implements IEventHandler<UserCreatedEvent> {
+  private readonly logger = new Logger(UserCreatedHandler.name);
+
+  constructor(
+    private readonly emailService: EmailService,
+    private readonly analyticsService: AnalyticsService,
+  ) {}
+
+  async handle(event: UserCreatedEvent): Promise<void> {
+    const { userId, email, timestamp } = event;
+
+    try {
+      this.logger.log(`Processing user created event for user: ${userId}`);
+      
+      // Send welcome email (don't throw on failure)
+      await this.emailService.sendWelcomeEmail(email).catch((error) => {
+        this.logger.error(`Failed to send welcome email to ${email}`, error);
+      });
+
+      // Track analytics (don't throw on failure)
+      await this.analyticsService.trackUserCreated(userId).catch((error) => {
+        this.logger.error(`Failed to track user creation for ${userId}`, error);
+      });
+
+      this.logger.log(`User created event processed successfully: ${userId}`);
+    } catch (error) {
+      this.logger.error(`Failed to process user created event: ${userId}`, error);
+      // Don't throw - events should be resilient
+    }
+  }
+}
+```
+
+## Module Organization
+
+### 7. Module Structure
+Organize modules consistently:
+
+```typescript
+// ✅ GOOD - Well-organized module
+@Module({
+  imports: [
+    CqrsModule,
+    TypeOrmModule.forFeature([UserEntity]),
+  ],
+  controllers: [UserController],
+  providers: [
+    // Services
+    UserService,
+    
+    // Command Handlers
+    CreateUserHandler,
+    UpdateUserHandler,
+    DeleteUserHandler,
+    
+    // Query Handlers
+    GetUserByIdHandler,
+    GetUsersHandler,
+    
+    // Event Handlers
+    UserCreatedHandler,
+    UserUpdatedHandler,
+    
+    // Repositories
+    UserRepository,
+  ],
+  exports: [
+    UserService,
+    UserRepository,
+  ],
+})
+export class UserModule {}
+```
+
+## Error Handling Patterns
+
+### 8. Exception Handling
+Use proper exception handling:
+
+```typescript
+// ✅ GOOD - Specific exception handling
+@Injectable()
+export class UserService {
+  async findById(id: string): Promise<User> {
+    try {
+      const user = await this.userRepository.findById(id);
+      if (!user) {
+        throw new NotFoundException(`User with ID ${id} not found`);
+      }
+      return user;
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      this.logger.error(`Failed to find user ${id}`, error);
+      throw new InternalServerErrorException('Failed to retrieve user');
+    }
+  }
+}
+
+// ✅ GOOD - Custom exception filter
+@Catch(HttpException)
+export class HttpExceptionFilter implements ExceptionFilter {
+  catch(exception: HttpException, host: ArgumentsHost): void {
+    const ctx = host.switchToHttp();
+    const response = ctx.getResponse<Response>();
+    const request = ctx.getRequest<Request>();
+    const status = exception.getStatus();
+
+    response.status(status).json({
+      statusCode: status,
+      timestamp: new Date().toISOString(),
+      path: request.url,
+      message: exception.message,
+    });
+  }
+}
+```
+
+## Testing Patterns
+
+### 9. Service Testing
+Test services with proper mocking:
+
+```typescript
+// ✅ GOOD - Comprehensive service test
+describe('UserService', () => {
+  let service: UserService;
+  let mockRepository: jest.Mocked<UserRepository>;
+  let mockEventBus: jest.Mocked<EventBus>;
+
+  beforeEach(async () => {
+    const mockRepo = {
+      findById: jest.fn(),
+      findByEmail: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn(),
+    };
+
+    const mockEvents = {
+      publish: jest.fn(),
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        UserService,
+        { provide: UserRepository, useValue: mockRepo },
+        { provide: EventBus, useValue: mockEvents },
+      ],
+    }).compile();
+
+    service = module.get<UserService>(UserService);
+    mockRepository = module.get(UserRepository);
+    mockEventBus = module.get(EventBus);
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('should create user successfully', async () => {
+    // Arrange
+    const userData = { email: 'test@example.com', name: 'John Doe' };
+    const expectedUser = { id: '1', ...userData };
+    
+    mockRepository.findByEmail.mockResolvedValue(null);
+    mockRepository.create.mockResolvedValue(expectedUser);
+
+    // Act
+    const result = await service.createUser(userData);
+
+    // Assert
+    expect(result).toEqual(expectedUser);
+    expect(mockRepository.create).toHaveBeenCalledWith(userData);
+    expect(mockEventBus.publish).toHaveBeenCalledWith(
+      expect.any(UserCreatedEvent)
+    );
+  });
+});
+```
+
+### 10. Controller Testing
+Test controllers with proper request/response handling:
+
+```typescript
+// ✅ GOOD - Controller integration test
+describe('UserController', () => {
+  let app: INestApplication;
+  let userService: jest.Mocked<UserService>;
+
+  beforeEach(async () => {
+    const mockUserService = {
+      createUser: jest.fn(),
+      findById: jest.fn(),
+      findAll: jest.fn(),
+    };
+
+    const moduleFixture: TestingModule = await Test.createTestingModule({
+      controllers: [UserController],
+      providers: [
+        { provide: UserService, useValue: mockUserService },
+      ],
+    }).compile();
+
+    app = moduleFixture.createNestApplication();
+    userService = moduleFixture.get(UserService);
+    await app.init();
+  });
+
+  afterEach(async () => {
+    await app.close();
+  });
+
+  it('should create user', () => {
+    const userData = { email: 'test@example.com', name: 'John Doe' };
+    const expectedUser = { id: '1', ...userData };
+    
+    userService.createUser.mockResolvedValue(expectedUser);
+
+    return request(app.getHttpServer())
+      .post('/users')
+      .send(userData)
+      .expect(201)
+      .expect(expectedUser);
+  });
+});
+```
+
+## Common Anti-Patterns to Avoid
+
+### 11. What NOT to Do
+
+```typescript
+// ❌ BAD - Circular dependencies
+@Injectable()
+export class UserService {
+  constructor(private readonly orderService: OrderService) {}
+}
+
+@Injectable()
+export class OrderService {
+  constructor(private readonly userService: UserService) {}
+}
+
+// ❌ BAD - Direct database access in controllers
+@Controller('users')
+export class UserController {
+  constructor(private readonly userRepository: UserRepository) {}
+  
+  @Get(':id')
+  async getUser(@Param('id') id: string) {
+    return this.userRepository.findById(id); // Should use service/query
+  }
+}
+
+// ❌ BAD - Throwing exceptions in event handlers
+@EventsHandler(UserCreatedEvent)
+export class UserCreatedHandler {
+  async handle(event: UserCreatedEvent): Promise<void> {
+    await this.emailService.sendEmail(event.email);
+    // If this throws, it will break the event flow
+  }
+}
+
+// ❌ BAD - Missing error handling
+@Injectable()
+export class UserService {
+  async createUser(userData: CreateUserDto): Promise<User> {
+    return this.userRepository.create(userData); // No error handling
+  }
+}
+```
+
+## Quick Reference
+
+### Common Fixes
+1. **Missing readonly**: Add `readonly` to constructor parameters
+2. **Circular dependencies**: Use forwardRef() or refactor architecture
+3. **Missing error handling**: Wrap in try-catch with proper exceptions
+4. **Event handler errors**: Never throw in event handlers, log instead
+5. **Missing validation**: Add class-validator decorators to DTOs
+6. **Improper testing**: Mock all dependencies, use proper test structure
+
+### Best Practices Checklist
+- [ ] All dependencies are readonly in constructors
+- [ ] Controllers only handle HTTP concerns
+- [ ] Services contain business logic
+- [ ] Commands/Queries are immutable
+- [ ] Event handlers are resilient (don't throw)
+- [ ] All external dependencies are mocked in tests
+- [ ] DTOs have proper validation decorators
+- [ ] Error handling is comprehensive
+- [ ] Swagger documentation is complete
+- [ ] Module organization follows domain boundaries

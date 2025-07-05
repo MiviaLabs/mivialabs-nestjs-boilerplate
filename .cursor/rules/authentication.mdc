@@ -1,0 +1,439 @@
+---
+description: authentication
+globs: 
+alwaysApply: false
+---
+# Authentication & Authorization Rules
+
+## JWT Authentication Implementation
+
+### Guard Usage
+Always use the JwtAuthGuard from `src/common/guards/jwt-auth.guard.ts` for protected routes.
+
+```typescript
+import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
+import { CurrentUser } from '../../../common/decorators/current-user.decorator';
+
+@Controller('protected')
+@UseGuards(JwtAuthGuard)
+export class ProtectedController {
+  @Get()
+  getProtectedData(@CurrentUser() user: AuthenticatedUser) {
+    return { message: 'Protected data', user };
+  }
+}
+```
+
+### CurrentUser Decorator
+Use the CurrentUser decorator to extract user data from the request.
+
+```typescript
+// Get entire user object
+@Get('profile')
+@UseGuards(JwtAuthGuard)
+getProfile(@CurrentUser() user: AuthenticatedUser) {
+  return user;
+}
+
+// Get specific user property
+@Get('user-id')
+@UseGuards(JwtAuthGuard)
+getUserId(@CurrentUser('id') userId: string) {
+  return { userId };
+}
+
+// Get user role
+@Get('role')
+@UseGuards(JwtAuthGuard)
+getUserRole(@CurrentUser('role') role: string) {
+  return { role };
+}
+```
+
+## JWT Token Generation
+
+### Using CQRS for Token Generation
+Always use the GenerateJwtTokenCommand for creating JWT tokens.
+
+```typescript
+@Post('login')
+async login(@Body() dto: LoginDto): Promise<JwtTokenResponse> {
+  // Validate user credentials first
+  const user = await this.authService.validateUser(dto.email, dto.password);
+  
+  if (!user) {
+    throw new UnauthorizedException('Invalid credentials');
+  }
+
+  // Generate JWT token using CQRS
+  const command = new GenerateJwtTokenCommand(
+    user.phone,
+    user.id,
+    {
+      email: user.email,
+      role: user.role,
+      loginMethod: 'email',
+    }
+  );
+
+  return this.commandBus.execute(command);
+}
+```
+
+### Token Response Format
+Always return tokens in the standard format:
+
+```typescript
+interface JwtTokenResponse {
+  accessToken: string;
+  tokenType: string; // Always "Bearer"
+  expiresIn: number; // Seconds until expiration
+}
+```
+
+## AuthenticatedUser Interface
+
+### User Data Structure
+The AuthenticatedUser interface defines the user data available in requests:
+
+```typescript
+interface AuthenticatedUser {
+  id: string;
+  phone: string;
+  email?: string;
+  name?: string;
+  lastName?: string;
+  role?: string;
+}
+```
+
+### Extending User Data
+When you need to add more user properties, update the interface and the guard's `assignUserToRequest` method:
+
+```typescript
+// In jwt-auth.guard.ts
+private async assignUserToRequest(payload: any): Promise<AuthenticatedUser> {
+  // Replace with actual user lookup
+  const user = await this.userService.findById(payload.sub);
+  
+  return {
+    id: user.id,
+    phone: user.phone,
+    email: user.email,
+    name: user.name,
+    lastName: user.lastName,
+    role: user.role,
+    // Add new properties here
+  };
+}
+```
+
+## Security Best Practices
+
+### Environment Variables
+Always configure these JWT environment variables:
+
+```env
+JWT_SECRET=your-super-secret-key-min-32-chars
+JWT_EXPIRES_IN=90d
+JWT_ISSUER=bord-api
+JWT_AUDIENCE=bord-mobile
+```
+
+### Token Validation
+The JwtAuthGuard automatically validates:
+- Token signature
+- Token expiration
+- Token format
+- Required claims
+
+### Error Handling
+Proper error responses for authentication failures:
+
+```typescript
+// In guards and controllers
+try {
+  const token = this.extractToken(request);
+  const payload = jwt.verify(token, secret);
+  // ... assign user
+} catch (error) {
+  if (error instanceof jwt.TokenExpiredError) {
+    throw new UnauthorizedException('Token has expired');
+  }
+  if (error instanceof jwt.JsonWebTokenError) {
+    throw new UnauthorizedException('Invalid token');
+  }
+  throw new UnauthorizedException('Authentication failed');
+}
+```
+
+## Role-Based Authorization
+
+### Creating Role Guards
+For role-based access control, create additional guards:
+
+```typescript
+@Injectable()
+export class RoleGuard implements CanActivate {
+  constructor(private reflector: Reflector) {}
+
+  canActivate(context: ExecutionContext): boolean {
+    const requiredRoles = this.reflector.getAllAndOverride<string[]>('roles', [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+
+    if (!requiredRoles) {
+      return true;
+    }
+
+    const { user } = context.switchToHttp().getRequest();
+    return requiredRoles.includes(user.role);
+  }
+}
+```
+
+### Role Decorator
+Create a decorator for specifying required roles:
+
+```typescript
+import { SetMetadata } from '@nestjs/common';
+
+export const Roles = (...roles: string[]) => SetMetadata('roles', roles);
+```
+
+### Using Role-Based Protection
+```typescript
+@Controller('admin')
+@UseGuards(JwtAuthGuard, RoleGuard)
+export class AdminController {
+  @Get('users')
+  @Roles('admin', 'moderator')
+  getUsers() {
+    return this.userService.findAll();
+  }
+
+  @Delete('users/:id')
+  @Roles('admin')
+  deleteUser(@Param('id') id: string) {
+    return this.userService.delete(id);
+  }
+}
+```
+
+## API Documentation
+
+### Swagger Authentication
+Always add proper Swagger documentation for authenticated endpoints:
+
+```typescript
+@Controller('protected')
+@ApiTags('Protected')
+@UseGuards(JwtAuthGuard)
+@ApiBearerAuth() // This adds the lock icon in Swagger
+export class ProtectedController {
+  @Get()
+  @ApiOperation({ summary: 'Get protected data' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Data retrieved successfully' 
+  })
+  @ApiResponse({ 
+    status: 401, 
+    description: 'Unauthorized - Invalid or missing token' 
+  })
+  getData(@CurrentUser() user: AuthenticatedUser) {
+    return { data: 'protected', user };
+  }
+}
+```
+
+### Authentication Endpoints Documentation
+```typescript
+@Controller('auth')
+@ApiTags('Authentication')
+export class AuthController {
+  @Post('phone')
+  @ApiOperation({ summary: 'Login with phone number' })
+  @ApiBody({ type: LoginPhoneDto })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Login successful',
+    schema: {
+      type: 'object',
+      properties: {
+        accessToken: { type: 'string' },
+        tokenType: { type: 'string', example: 'Bearer' },
+        expiresIn: { type: 'number', example: 7776000 }
+      }
+    }
+  })
+  @ApiResponse({ 
+    status: 401, 
+    description: 'Invalid credentials' 
+  })
+  async loginPhone(@Body() dto: LoginPhoneDto) {
+    // Implementation
+  }
+}
+```
+
+## Testing Authentication
+
+### Testing Protected Endpoints
+```typescript
+describe('Protected Endpoints', () => {
+  let app: INestApplication;
+  let jwtToken: string;
+
+  beforeEach(async () => {
+    // Setup app and get JWT token
+    const loginResponse = await request(app.getHttpServer())
+      .post('/auth/phone')
+      .send({ phone: '+5511999999999' })
+      .expect(200);
+
+    jwtToken = loginResponse.body.accessToken;
+  });
+
+  it('should access protected endpoint with valid token', () => {
+    return request(app.getHttpServer())
+      .get('/profile')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+  });
+
+  it('should reject access without token', () => {
+    return request(app.getHttpServer())
+      .get('/profile')
+      .expect(401);
+  });
+
+  it('should reject access with invalid token', () => {
+    return request(app.getHttpServer())
+      .get('/profile')
+      .set('Authorization', 'Bearer invalid-token')
+      .expect(401);
+  });
+});
+```
+
+### Mocking Authentication in Tests
+```typescript
+describe('UserController', () => {
+  let controller: UserController;
+  let mockUser: AuthenticatedUser;
+
+  beforeEach(async () => {
+    mockUser = {
+      id: '1',
+      phone: '+5511999999999',
+      email: 'test@example.com',
+      name: 'Test User',
+      role: 'user',
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      controllers: [UserController],
+      providers: [
+        {
+          provide: JwtAuthGuard,
+          useValue: {
+            canActivate: jest.fn(() => true),
+          },
+        },
+      ],
+    })
+    .overrideGuard(JwtAuthGuard)
+    .useValue({
+      canActivate: (context: ExecutionContext) => {
+        const req = context.switchToHttp().getRequest();
+        req.user = mockUser;
+        return true;
+      },
+    })
+    .compile();
+
+    controller = module.get<UserController>(UserController);
+  });
+});
+```
+
+## Common Patterns
+
+### Conditional Authentication
+For endpoints that work with or without authentication:
+
+```typescript
+@Controller('posts')
+export class PostsController {
+  @Get()
+  async getPosts(@CurrentUser() user?: AuthenticatedUser) {
+    if (user) {
+      // Return personalized posts
+      return this.postsService.getPersonalizedPosts(user.id);
+    }
+    // Return public posts
+    return this.postsService.getPublicPosts();
+  }
+}
+```
+
+### Multiple Authentication Methods
+```typescript
+@Controller('api')
+@UseGuards(JwtAuthGuard) // Default to JWT
+export class ApiController {
+  @Post('webhook')
+  @UseGuards(ApiKeyGuard) // Override with API key for webhooks
+  handleWebhook(@Body() data: any) {
+    return this.webhookService.process(data);
+  }
+}
+```
+
+## Security Considerations
+
+### Token Storage
+- **Frontend**: Store tokens securely (httpOnly cookies or secure storage)
+- **Mobile**: Use secure keychain/keystore
+- **Never**: Store tokens in localStorage for sensitive applications
+
+### Token Refresh
+Consider implementing refresh tokens for long-lived sessions:
+
+```typescript
+interface TokenPair {
+  accessToken: string;
+  refreshToken: string;
+  expiresIn: number;
+}
+```
+
+### Rate Limiting
+Implement rate limiting on authentication endpoints:
+
+```typescript
+@Controller('auth')
+@UseGuards(ThrottlerGuard)
+@Throttle(5, 60) // 5 attempts per minute
+export class AuthController {
+  @Post('login')
+  async login(@Body() dto: LoginDto) {
+    // Implementation
+  }
+}
+```
+
+## Common Mistakes to Avoid
+
+1. **Don't skip authentication on sensitive endpoints**
+2. **Don't expose user passwords or sensitive data**
+3. **Don't use weak JWT secrets**
+4. **Don't ignore token expiration**
+5. **Don't trust client-side validation only**
+6. **Don't log sensitive authentication data**
+7. **Don't use the same secret across environments**
+8. **Don't forget to validate user permissions**
+9. **Don't implement custom crypto - use proven libraries**
+10. **Don't skip rate limiting on auth endpoints** 

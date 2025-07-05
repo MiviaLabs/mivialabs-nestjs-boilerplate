@@ -1,0 +1,391 @@
+---
+description: databse schema, tests, repositories, cqrs query and commands, postgres, postgresql
+globs: 
+alwaysApply: false
+---
+# Row Level Security (RLS) Rules
+
+## Overview
+This project implements Row Level Security (RLS) for multi-tenant organization isolation. These rules ensure proper data isolation and security patterns.
+
+## Core Principles
+
+### 1. Organization Isolation
+- All user data MUST be isolated by `organizationId`
+- Users can only access data from their own organization
+- RLS policies automatically enforce this isolation
+- System admins can bypass RLS for administrative tasks
+
+### 2. Global vs Organization Data
+- **Global Data**: Tools, system agents (organizationId = NULL)
+- **Organization Data**: User-created content (organizationId = required)
+- **Mixed Data**: Agents, events (organizationId = optional)
+
+## Database Schema Rules
+
+### Table Design
+```typescript
+// ✅ CORRECT: Organization-specific table
+export const workspace = pgTable('workspace', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: uuid('organization_id')
+    .references(() => organization.id, { onDelete: 'cascade' })
+    .notNull(), // Required for user data
+  // ... other fields
+}, (table) => [
+  // Standard organization isolation policy
+  pgPolicy('workspace_org_policy', {
+    as: 'permissive',
+    to: 'authenticated',
+    for: 'all',
+    using: sql`${table.organizationId} = current_setting('app.current_organization_id')::uuid`,
+    withCheck: sql`${table.organizationId} = current_setting('app.current_organization_id')::uuid`,
+  }),
+]).enableRLS();
+
+// ✅ CORRECT: Global system table
+export const tool = pgTable('tool', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  // No organizationId - global for all organizations
+  name: varchar('name', { length: 255 }).notNull(),
+  // ... other fields
+}, (table) => [
+  // Read-only access for authenticated users
+  pgPolicy('tool_read_policy', {
+    as: 'permissive',
+    to: 'authenticated',
+    for: 'select',
+    using: sql`true`,
+  }),
+]).enableRLS();
+
+// ✅ CORRECT: Mixed table (global + organization)
+export const agent = pgTable('agent', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: uuid('organization_id')
+    .references(() => organization.id, { onDelete: 'cascade' })
+    .default(sql`NULL`), // NULL = global, non-NULL = org-specific
+  // ... other fields
+}, (table) => [
+  // Read: global agents OR organization agents
+  pgPolicy('agent_read_policy', {
+    as: 'permissive',
+    to: 'authenticated',
+    for: 'select',
+    using: sql`${table.organizationId} IS NULL OR ${table.organizationId} = current_setting('app.current_organization_id')::uuid`,
+  }),
+  // Write: only organization agents
+  pgPolicy('agent_insert_policy', {
+    as: 'permissive',
+    to: 'authenticated',
+    for: 'insert',
+    withCheck: sql`${table.organizationId} = current_setting('app.current_organization_id')::uuid`,
+  }),
+]).enableRLS();
+```
+
+### Required RLS Policies
+Every RLS-enabled table MUST have:
+- **Read policy**: Controls SELECT operations
+- **Write policies**: Controls INSERT/UPDATE/DELETE operations
+- **Organization context**: Uses `current_setting('app.current_organization_id')::uuid`
+
+## Database Transaction Rules
+
+### Use Correct Transaction Type
+
+```typescript
+// ✅ CORRECT: Standard user operations
+import { rlsTx } from '@db/postgres/rls-tx';
+
+await rlsTx(db, {
+  organizationId: user.organizationId,
+  userId: user.id,
+  sessionId: sessionId,
+}, async (tx) => {
+  // All operations automatically filtered by organization
+  const workspaces = await tx.select().from(workspace);
+  await tx.insert(workflow).values(newWorkflow);
+});
+
+// ✅ CORRECT: System operations (seeds, admin tasks)
+import { systemAdminTx } from '@db/postgres/rls-tx';
+
+await systemAdminTx(db, async (tx) => {
+  // Bypasses RLS - use only for global data
+  await tx.insert(tool).values(globalTool);
+  await tx.insert(agent).values(globalAgent);
+});
+
+// ✅ CORRECT: Public data operations
+import { publicTx } from '@db/postgres/rls-tx';
+
+await publicTx(db, async (tx) => {
+  // No RLS context - for truly public operations
+  await tx.select().from(publicTable);
+});
+
+// ❌ WRONG: Direct database operations without RLS context
+await db.insert(workspace).values(data); // Will bypass RLS!
+```
+
+### Legacy Support
+```typescript
+// ✅ ACCEPTABLE: Legacy string usage (backward compatibility)
+await rlsTx(db, user.organizationId, async (tx) => {
+  // Will work but prefer object syntax
+});
+```
+
+## Authentication Integration
+
+### JWT Token Requirements
+```typescript
+// ✅ CORRECT: Include organizationId in JWT
+const payload: JwtPayload = {
+  sub: userId,
+  organizationId: user.organizationId, // Required for RLS
+  email: user.email,
+  // ... other claims
+};
+```
+
+### Auth Guard Integration
+```typescript
+// ✅ CORRECT: RLS context is automatically set
+@UseGuards(JwtAuthGuard)
+@Controller('workspaces')
+export class WorkspaceController {
+  @Get()
+  async getWorkspaces(@CurrentUser() user: AuthenticatedUser) {
+    // RLS context already set by guard
+    // Queries automatically filtered by organization
+    return this.workspaceService.findAll();
+  }
+}
+```
+
+## Event Handling Rules
+
+### Use Appropriate Event Creation Method
+
+```typescript
+// ✅ CORRECT: Organization-specific events
+await eventsService.createOrganizationEvent({
+  eventType: 'WorkspaceCreated',
+  aggregateId: workspace.id,
+  aggregateType: 'Workspace',
+  eventData: eventData,
+  organizationId: user.organizationId, // Required
+  userId: user.id,
+});
+
+// ✅ CORRECT: System-wide events
+await eventsService.createSystemEvent({
+  eventType: 'SystemMaintenance',
+  aggregateId: systemId,
+  aggregateType: 'System',
+  eventData: eventData,
+  // No organizationId - visible to all
+});
+
+// ❌ WRONG: Generic createEvent without context
+await eventsService.createEvent({
+  eventType: 'SomeEvent',
+  // Missing organization context!
+});
+```
+
+## Seed Data Rules
+
+### Global Data Seeds
+```typescript
+// ✅ CORRECT: Global tools/agents use systemAdminTx
+export async function seedGlobalTools(db: PostgresDb) {
+  await systemAdminTx(db, async (tx) => {
+    await tx.insert(tool).values(globalTools);
+    await tx.insert(agent).values(globalAgents);
+  });
+}
+```
+
+### Organization Data Seeds
+```typescript
+// ✅ CORRECT: Organization data requires organizationId
+export async function seedOrganizationData(db: PostgresDb, organizationId: string) {
+  await rlsTx(db, { organizationId }, async (tx) => {
+    await tx.insert(workspace).values({
+      organizationId,
+      name: 'Default Workspace',
+    });
+  });
+}
+```
+
+## Controller Security Rules
+
+### Organization Context Validation
+```typescript
+// ✅ CORRECT: Validate organization context
+@Post()
+async createWorkspace(
+  @Body() dto: CreateWorkspaceDto,
+  @CurrentUser() user: AuthenticatedUser,
+) {
+  if (!user.organizationId) {
+    throw new BadRequestException('User must be assigned to an organization');
+  }
+  
+  // RLS automatically ensures data isolation
+  return this.workspaceService.create(dto, user.organizationId);
+}
+
+// ❌ WRONG: Trusting DTO organizationId
+@Post()
+async createWorkspace(@Body() dto: CreateWorkspaceDto) {
+  // Never trust organizationId from request body!
+  return this.workspaceService.create(dto);
+}
+```
+
+### Admin Operations
+```typescript
+// ✅ CORRECT: Admin operations with proper checks
+@Post('admin/global-agent')
+@UseGuards(AdminGuard) // Ensure user is admin
+async createGlobalAgent(@Body() dto: CreateAgentDto) {
+  // Use systemAdminTx for global resources
+  return this.agentService.createGlobal(dto);
+}
+```
+
+## Testing Rules
+
+### RLS Testing Patterns
+```typescript
+// ✅ CORRECT: Test organization isolation
+describe('Workspace isolation', () => {
+  it('should not allow cross-organization access', async () => {
+    const org1User = await createTestUser(org1.id);
+    const org2User = await createTestUser(org2.id);
+    
+    const workspace = await createWorkspace(org1.id);
+    
+    // Org1 user can access
+    await rlsTx(db, { organizationId: org1.id }, async (tx) => {
+      const result = await tx.select().from(workspaceTable).where(eq(workspaceTable.id, workspace.id));
+      expect(result).toHaveLength(1);
+    });
+    
+    // Org2 user cannot access
+    await rlsTx(db, { organizationId: org2.id }, async (tx) => {
+      const result = await tx.select().from(workspaceTable).where(eq(workspaceTable.id, workspace.id));
+      expect(result).toHaveLength(0);
+    });
+  });
+});
+```
+
+## Common Anti-Patterns
+
+### ❌ AVOID These Patterns
+
+```typescript
+// ❌ WRONG: Direct database access without RLS
+await db.select().from(workspace); // Bypasses RLS!
+
+// ❌ WRONG: Trusting client-provided organizationId
+@Post()
+async create(@Body() dto: { organizationId: string; name: string }) {
+  // Client can specify any organizationId!
+  return this.service.create(dto);
+}
+
+// ❌ WRONG: Manual organization filtering
+const workspaces = await db.select().from(workspace)
+  .where(eq(workspace.organizationId, user.organizationId)); // RLS should handle this!
+
+// ❌ WRONG: Mixing transaction types
+await rlsTx(db, { organizationId }, async (tx) => {
+  await db.insert(tool).values(data); // Using db instead of tx!
+});
+
+// ❌ WRONG: System operations in user context
+await rlsTx(db, { organizationId }, async (tx) => {
+  await tx.insert(tool).values(globalTool); // Should use systemAdminTx!
+});
+```
+
+## Migration Rules
+
+### Adding RLS to Existing Tables
+```sql
+-- 1. Add organizationId column
+ALTER TABLE existing_table ADD COLUMN organization_id uuid REFERENCES organization(id) ON DELETE CASCADE;
+
+-- 2. Enable RLS
+ALTER TABLE existing_table ENABLE ROW LEVEL SECURITY;
+
+-- 3. Create policies
+CREATE POLICY "existing_table_org_policy" ON existing_table 
+  AS PERMISSIVE FOR ALL TO authenticated 
+  USING (organization_id = current_setting('app.current_organization_id')::uuid)
+  WITH CHECK (organization_id = current_setting('app.current_organization_id')::uuid);
+
+-- 4. Grant admin bypass
+ALTER ROLE system_admin BYPASSRLS;
+```
+
+## Debugging RLS
+
+### Check RLS Context
+```typescript
+import { getCurrentRLSContext } from '@db/postgres/rls-tx';
+
+const context = await getCurrentRLSContext(db);
+console.log('Current RLS context:', context);
+// { organizationId: 'uuid', userId: 'uuid', sessionId: 'string' }
+```
+
+### Disable RLS for Debugging (DEV ONLY)
+```sql
+-- DANGER: Only for development debugging
+ALTER TABLE table_name DISABLE ROW LEVEL SECURITY;
+-- Remember to re-enable:
+ALTER TABLE table_name ENABLE ROW LEVEL SECURITY;
+```
+
+## Performance Considerations
+
+### RLS Policy Optimization
+- Policies should use indexes on organizationId
+- Keep policies simple and efficient
+- Test performance with large datasets
+- Monitor query plans with RLS enabled
+
+### Connection Pooling
+- RLS context is per-connection
+- Connection pools may share context
+- Always set context at transaction start
+- Use transaction-scoped context setting
+
+## Security Checklist
+
+### Before Production
+- [ ] All user tables have organizationId
+- [ ] All tables have RLS enabled
+- [ ] All RLS policies tested
+- [ ] Admin bypass role configured
+- [ ] Seeds use proper transaction types
+- [ ] Controllers validate organization context
+- [ ] Events include organization context
+- [ ] Tests verify isolation
+- [ ] Performance tested with RLS
+- [ ] Documentation updated
+
+### Regular Audits
+- [ ] Review RLS policies quarterly
+- [ ] Test cross-organization isolation
+- [ ] Validate admin access patterns
+- [ ] Monitor RLS performance impact
+- [ ] Update cursor rules as needed

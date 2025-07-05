@@ -1,0 +1,246 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+---
+description: Event-Driven Architecture & Event Sourcing Rules
+globs: 
+  - "src/modules/events/**/*"
+  - "**/*.event.ts"
+
+# Event-Driven Architecture Rules
+
+## Overview
+This project implements event-driven architecture with event sourcing capabilities. All events must be properly stored, versioned, and made available for replay and analysis.
+
+## Event Schema & Storage
+
+### Event Schema Structure
+All events must follow the standardized event schema defined in `libs/db/src/postgres/schema/event.ts`:
+
+```typescript
+export const event = pgTable('event', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    eventType: text('event_type').notNull(),
+    eventVersion: text('event_version').notNull().default('1.0'),
+    aggregateId: uuid('aggregate_id').notNull(),
+    aggregateType: text('aggregate_type').notNull(),
+    aggregateVersion: integer('aggregate_version').notNull().default(1),
+    eventData: jsonb('event_data').notNull(),
+    metadata: jsonb('metadata'),
+    sequenceNumber: integer('sequence_number').notNull(),
+    causationId: uuid('causation_id'),
+    correlationId: uuid('correlation_id'),
+    userId: uuid('user_id'),
+    sessionId: text('session_id'),
+    ...timestamps,
+});
+```
+
+### Event Naming Conventions
+- Event types must be past tense: `UserCreated`, `OrderProcessed`, `PaymentCompleted`
+- Event files must end with `.event.ts`
+- Event classes must implement `IEvent` from `@nestjs/cqrs`
+- Event handlers must end with `.handler.ts`
+
+## Events Module Usage
+
+### EventsRepository
+Use the global EventsRepository for all event storage operations:
+
+```typescript
+import { EventsRepository } from '@/modules/events/repositories/events.repository';
+
+@Injectable()
+export class SomeService {
+    constructor(private readonly eventsRepository: EventsRepository) {}
+
+    async storeEvent(eventData: Omit<NewEvent, 'id' | 'createdAt' | 'updatedAt'>) {
+        return this.eventsRepository.store(eventData);
+    }
+}
+```
+
+### EventsService
+Use EventsService for high-level event operations:
+
+```typescript
+import { EventsService } from '@/modules/events/services/events.service';
+
+@Injectable()
+export class BusinessService {
+    constructor(private readonly eventsService: EventsService) {}
+
+    async createBusinessEvent(options: CreateEventOptions) {
+        return this.eventsService.createEvent(options);
+    }
+
+    async rebuildAggregateState(aggregateId: string, aggregateType: string) {
+        return this.eventsService.rebuildAggregateState(
+            aggregateId,
+            aggregateType,
+            initialState,
+            applyEventFunction
+        );
+    }
+}
+```
+
+### EventStoreService
+Use EventStoreService for CQRS integration and event bus publishing:
+
+```typescript
+import { EventStoreService } from '@/modules/events/services/event-store.service';
+
+@Injectable()
+@CommandHandler(SomeCommand)
+export class SomeCommandHandler {
+    constructor(private readonly eventStore: EventStoreService) {}
+
+    async execute(command: SomeCommand) {
+        // Store and publish event from command
+        await this.eventStore.storeFromCommand(
+            command.id,
+            'SomeEventType',
+            command.aggregateId,
+            'SomeAggregate',
+            eventData,
+            metadata,
+            command.userId
+        );
+    }
+}
+```
+
+## Event Definition Patterns
+
+### Basic Event Structure
+```typescript
+import { IEvent } from '@nestjs/cqrs';
+
+export class UserCreatedEvent implements IEvent {
+    constructor(
+        public readonly userId: string,
+        public readonly email: string,
+        public readonly login: string,
+        public readonly timestamp: Date = new Date(),
+    ) {}
+}
+```
+
+### Event Handler Pattern
+```typescript
+import { EventsHandler, IEventHandler } from '@nestjs/cqrs';
+import { Injectable, Logger } from '@nestjs/common';
+
+@Injectable()
+@EventsHandler(UserCreatedEvent)
+export class UserCreatedHandler implements IEventHandler<UserCreatedEvent> {
+    private readonly logger = new Logger(UserCreatedHandler.name);
+
+    constructor(
+        // Inject required services
+    ) {}
+
+    async handle(event: UserCreatedEvent): Promise<void> {
+        const { userId, email, login, timestamp } = event;
+
+        try {
+            this.logger.log(`Processing user created event for user: ${userId}`);
+            
+            // Implement business logic
+            await this.processUserCreation(userId, email, login);
+            
+            this.logger.log(`User created event processed successfully: ${userId}`);
+        } catch (error) {
+            this.logger.error(`Failed to process user created event: ${userId}`, error);
+            // Don't throw - events should be resilient
+        }
+    }
+
+    private async processUserCreation(userId: string, email: string, login: string) {
+        // Business logic implementation
+    }
+}
+```
+
+## Event Publishing from Command Handlers
+
+### Publishing Events in Command Handlers
+```typescript
+@Injectable()
+@CommandHandler(RegisterCommand)
+export class RegisterHandler implements ICommandHandler<RegisterCommand> {
+    constructor(
+        private readonly userRepository: UserRepository,
+        private readonly eventStore: EventStoreService,
+    ) {}
+
+    async execute(command: RegisterCommand): Promise<RegisterResponse> {
+        // Business logic
+        const user = await this.userRepository.create(userData);
+
+        // Store and publish event
+        await this.eventStore.storeFromCommand(
+            command.id || uuidv4(),
+            'UserCreatedEvent',
+            user.id,
+            'User',
+            {
+                userId: user.id,
+                email: user.email,
+                login: user.login,
+            },
+            {
+                registrationSource: 'web',
+                ipAddress: command.ipAddress,
+                userAgent: command.userAgent,
+            },
+            user.id
+        );
+
+        return {
+            id: user.id,
+            email: user.email,
+            login: user.login,
+            isActive: user.isActive,
+            createdAt: user.createdAt,
+        };
+    }
+}
+```
+
+## Best Practices
+
+### Event Handler Guidelines
+1. **Idempotency**: Event handlers should be idempotent - safe to run multiple times
+2. **Error Resilience**: Never throw exceptions from event handlers
+3. **Logging**: Always log event processing for debugging
+4. **Performance**: Keep event handlers fast and lightweight
+5. **Side Effects**: Minimize side effects and external dependencies
+
+### Event Design Guidelines
+1. **Immutability**: Events should be immutable once created
+2. **Completeness**: Include all necessary data in the event
+3. **Versioning**: Plan for event schema evolution
+4. **Naming**: Use clear, business-meaningful names
+5. **Size**: Keep events reasonably sized (avoid large payloads)
+
+### Event Store Guidelines
+1. **Consistency**: Always use the EventStoreService for CQRS integration
+2. **Correlation**: Use correlation IDs to track related events
+3. **Metadata**: Include relevant metadata for debugging and analysis
+4. **Replay**: Design events to be replayable
+5. **Archival**: Implement event archival strategies for old data
+
+### Common Anti-Patterns to Avoid
+1. **Don't modify events after creation**
+2. **Don't include sensitive data in events**
+3. **Don't make events dependent on external state**
+4. **Don't use events for request-response patterns**
+5. **Don't ignore event ordering and versioning**
+6. **Don't skip event validation and schema checks**
+7. **Don't forget to handle event replay scenarios**
+
+7. **Don't forget to handle event replay scenarios**

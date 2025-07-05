@@ -1,0 +1,337 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# NestJS Specific Rules
+
+## Module Structure
+
+### Module Creation Pattern
+```typescript
+import { Module } from '@nestjs/common';
+import { CqrsModule } from '@nestjs/cqrs';
+
+@Module({
+  imports: [
+    CqrsModule, // Always include if using CQRS
+  ],
+  controllers: [
+    // List all controllers
+  ],
+  providers: [
+    // List all services, handlers, guards
+  ],
+  exports: [
+    // Export what other modules need
+  ],
+})
+export class FeatureModule {}
+```
+
+### Controller Best Practices
+- Always use proper HTTP status codes
+- Implement comprehensive Swagger documentation
+- Use DTOs for all request/response data
+- Apply guards for protected routes
+- Handle errors gracefully
+
+```typescript
+@Controller('feature')
+@ApiTags('Feature')
+export class FeatureController {
+  constructor(private readonly commandBus: CommandBus) {}
+
+  @Post()
+  @ApiOperation({ summary: 'Create feature' })
+  @ApiResponse({ status: 201, description: 'Feature created successfully' })
+  @ApiResponse({ status: 400, description: 'Bad request' })
+  async create(@Body() dto: CreateFeatureDto) {
+    const command = new CreateFeatureCommand(dto);
+    return this.commandBus.execute(command);
+  }
+}
+```
+
+### Service Guidelines
+- Keep services focused on single responsibility
+- Use dependency injection properly
+- Implement proper error handling
+- Make services testable
+
+```typescript
+@Injectable()
+export class FeatureService {
+  constructor(
+    private readonly repository: FeatureRepository,
+    private readonly logger: Logger,
+  ) {}
+
+  async findById(id: string): Promise<Feature | null> {
+    try {
+      return await this.repository.findById(id);
+    } catch (error) {
+      this.logger.error(`Failed to find feature ${id}`, error);
+      throw new InternalServerErrorException('Failed to retrieve feature');
+    }
+  }
+}
+```
+
+## Dependency Injection
+
+### Constructor Injection
+- Always use constructor injection
+- Use readonly for injected dependencies
+- Order dependencies logically
+
+```typescript
+@Injectable()
+export class UserService {
+  constructor(
+    private readonly userRepository: UserRepository,
+    private readonly emailService: EmailService,
+    private readonly logger: Logger,
+  ) {}
+}
+```
+
+### Provider Registration
+- Register all providers in module
+- Use proper scope when needed
+- Export providers that other modules need
+
+## Guards and Interceptors
+
+### Guard Implementation
+```typescript
+@Injectable()
+export class RoleGuard implements CanActivate {
+  constructor(private reflector: Reflector) {}
+
+  canActivate(context: ExecutionContext): boolean {
+    const requiredRoles = this.reflector.getAllAndOverride<Role[]>(ROLES_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    
+    if (!requiredRoles) {
+      return true;
+    }
+
+    const { user } = context.switchToHttp().getRequest();
+    return requiredRoles.some((role) => user.roles?.includes(role));
+  }
+}
+```
+
+### Interceptor Implementation
+```typescript
+@Injectable()
+export class LoggingInterceptor implements NestInterceptor {
+  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
+    const now = Date.now();
+    return next
+      .handle()
+      .pipe(
+        tap(() => console.log(`After... ${Date.now() - now}ms`)),
+      );
+  }
+}
+```
+
+## Pipes and Validation
+
+### Custom Pipe
+```typescript
+@Injectable()
+export class ParseIntPipe implements PipeTransform<string, number> {
+  transform(value: string, metadata: ArgumentMetadata): number {
+    const val = parseInt(value, 10);
+    if (isNaN(val)) {
+      throw new BadRequestException('Validation failed');
+    }
+    return val;
+  }
+}
+```
+
+### Validation Pipe Usage
+- Always use ValidationPipe globally
+- Use class-validator decorators in DTOs
+- Provide meaningful error messages
+
+## Exception Handling
+
+### Custom Exceptions
+```typescript
+export class UserNotFoundException extends NotFoundException {
+  constructor(userId: string) {
+    super(`User with ID ${userId} not found`);
+  }
+}
+```
+
+### Exception Filter
+```typescript
+@Catch(HttpException)
+export class HttpExceptionFilter implements ExceptionFilter {
+  catch(exception: HttpException, host: ArgumentsHost) {
+    const ctx = host.switchToHttp();
+    const response = ctx.getResponse<Response>();
+    const request = ctx.getRequest<Request>();
+    const status = exception.getStatus();
+
+    response
+      .status(status)
+      .json({
+        statusCode: status,
+        timestamp: new Date().toISOString(),
+        path: request.url,
+        message: exception.message,
+      });
+  }
+}
+```
+
+## Configuration
+
+### Environment Configuration
+```typescript
+@Injectable()
+export class ConfigService {
+  get jwtSecret(): string {
+    return process.env.JWT_SECRET || 'default-secret';
+  }
+
+  get databaseUrl(): string {
+    const url = process.env.DATABASE_URL;
+    if (!url) {
+      throw new Error('DATABASE_URL is required');
+    }
+    return url;
+  }
+}
+```
+
+### Configuration Module
+```typescript
+@Module({
+  imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      validationSchema: Joi.object({
+        NODE_ENV: Joi.string()
+          .valid('development', 'production', 'test')
+          .default('development'),
+        PORT: Joi.number().default(3000),
+        DATABASE_URL: Joi.string().required(),
+        JWT_SECRET: Joi.string().required(),
+      }),
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+## Testing
+
+### Unit Test Structure
+```typescript
+describe('UserService', () => {
+  let service: UserService;
+  let repository: jest.Mocked<UserRepository>;
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        UserService,
+        {
+          provide: UserRepository,
+          useValue: {
+            findById: jest.fn(),
+            create: jest.fn(),
+          },
+        },
+      ],
+    }).compile();
+
+    service = module.get<UserService>(UserService);
+    repository = module.get(UserRepository);
+  });
+
+  it('should find user by id', async () => {
+    const user = { id: '1', name: 'John' };
+    repository.findById.mockResolvedValue(user);
+
+    const result = await service.findById('1');
+
+    expect(result).toEqual(user);
+    expect(repository.findById).toHaveBeenCalledWith('1');
+  });
+});
+```
+
+### Integration Test Structure
+```typescript
+describe('UserController (e2e)', () => {
+  let app: INestApplication;
+
+  beforeEach(async () => {
+    const moduleFixture: TestingModule = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile();
+
+    app = moduleFixture.createNestApplication();
+    await app.init();
+  });
+
+  it('/users (GET)', () => {
+    return request(app.getHttpServer())
+      .get('/users')
+      .expect(200)
+      .expect('Hello World!');
+  });
+});
+```
+
+## Performance Considerations
+
+### Caching
+```typescript
+@Injectable()
+export class UserService {
+  @Cacheable('users', 300) // Cache for 5 minutes
+  async findById(id: string): Promise<User> {
+    return this.userRepository.findById(id);
+  }
+}
+```
+
+### Async Operations
+- Always use async/await
+- Handle Promise rejections
+- Use proper error handling
+
+```typescript
+async processUsers(): Promise<void> {
+  try {
+    const users = await this.userService.findAll();
+    await Promise.all(users.map(user => this.processUser(user)));
+  } catch (error) {
+    this.logger.error('Failed to process users', error);
+    throw new InternalServerErrorException('Processing failed');
+  }
+}
+```
+
+## Common Anti-Patterns to Avoid
+
+1. **Don't use circular dependencies**
+2. **Don't inject the entire module**
+3. **Don't use synchronous operations for I/O**
+4. **Don't forget to handle errors**
+5. **Don't skip validation**
+6. **Don't expose internal implementation details**
+7. **Don't use any type**
+8. **Don't forget to test** 

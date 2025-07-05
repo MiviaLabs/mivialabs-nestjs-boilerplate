@@ -1,0 +1,400 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# CQRS Pattern Rules
+
+## Overview
+Command Query Responsibility Segregation (CQRS) separates read and write operations for better scalability and maintainability.
+
+## Command Structure
+
+### Command Definition
+```typescript
+import { ICommand } from '@nestjs/cqrs';
+
+export class CreateUserCommand implements ICommand {
+  constructor(
+    public readonly email: string,
+    public readonly name: string,
+    public readonly phone?: string,
+  ) {}
+}
+```
+
+### Command Handler
+```typescript
+import { CommandHandler, ICommandHandler } from '@nestjs/cqrs';
+import { Injectable } from '@nestjs/common';
+
+@Injectable()
+@CommandHandler(CreateUserCommand)
+export class CreateUserHandler implements ICommandHandler<CreateUserCommand> {
+  constructor(
+    private readonly userRepository: UserRepository,
+    private readonly eventBus: EventBus,
+  ) {}
+
+  async execute(command: CreateUserCommand): Promise<User> {
+    const { email, name, phone } = command;
+
+    // Validate business rules
+    const existingUser = await this.userRepository.findByEmail(email);
+    if (existingUser) {
+      throw new ConflictException('User already exists');
+    }
+
+    // Create user
+    const user = await this.userRepository.create({
+      email,
+      name,
+      phone,
+    });
+
+    // Publish domain event
+    this.eventBus.publish(new UserCreatedEvent(user.id, user.email));
+
+    return user;
+  }
+}
+```
+
+## Query Structure
+
+### Query Definition
+```typescript
+import { IQuery } from '@nestjs/cqrs';
+
+export class GetUserByIdQuery implements IQuery {
+  constructor(public readonly userId: string) {}
+}
+
+export class GetUsersQuery implements IQuery {
+  constructor(
+    public readonly page: number = 1,
+    public readonly limit: number = 10,
+    public readonly search?: string,
+  ) {}
+}
+```
+
+### Query Handler
+```typescript
+import { QueryHandler, IQueryHandler } from '@nestjs/cqrs';
+import { Injectable } from '@nestjs/common';
+
+@Injectable()
+@QueryHandler(GetUserByIdQuery)
+export class GetUserByIdHandler implements IQueryHandler<GetUserByIdQuery> {
+  constructor(private readonly userRepository: UserRepository) {}
+
+  async execute(query: GetUserByIdQuery): Promise<User | null> {
+    const { userId } = query;
+    return this.userRepository.findById(userId);
+  }
+}
+
+@Injectable()
+@QueryHandler(GetUsersQuery)
+export class GetUsersHandler implements IQueryHandler<GetUsersQuery> {
+  constructor(private readonly userRepository: UserRepository) {}
+
+  async execute(query: GetUsersQuery): Promise<PaginatedResult<User>> {
+    const { page, limit, search } = query;
+    return this.userRepository.findMany({
+      page,
+      limit,
+      search,
+    });
+  }
+}
+```
+
+## Event Structure
+
+### Event Definition
+```typescript
+import { IEvent } from '@nestjs/cqrs';
+
+export class UserCreatedEvent implements IEvent {
+  constructor(
+    public readonly userId: string,
+    public readonly email: string,
+    public readonly timestamp: Date = new Date(),
+  ) {}
+}
+```
+
+### Event Handler
+```typescript
+import { EventsHandler, IEventHandler } from '@nestjs/cqrs';
+import { Injectable } from '@nestjs/common';
+
+@Injectable()
+@EventsHandler(UserCreatedEvent)
+export class UserCreatedHandler implements IEventHandler<UserCreatedEvent> {
+  constructor(
+    private readonly emailService: EmailService,
+    private readonly logger: Logger,
+  ) {}
+
+  async handle(event: UserCreatedEvent): Promise<void> {
+    const { userId, email } = event;
+
+    try {
+      await this.emailService.sendWelcomeEmail(email);
+      this.logger.log(`Welcome email sent to user ${userId}`);
+    } catch (error) {
+      this.logger.error(`Failed to send welcome email to ${email}`, error);
+      // Don't throw - events should be resilient
+    }
+  }
+}
+```
+
+## Controller Integration
+
+### Using Commands and Queries in Controllers
+```typescript
+@Controller('users')
+@ApiTags('Users')
+export class UserController {
+  constructor(
+    private readonly commandBus: CommandBus,
+    private readonly queryBus: QueryBus,
+  ) {}
+
+  @Post()
+  @ApiOperation({ summary: 'Create a new user' })
+  async createUser(@Body() dto: CreateUserDto): Promise<User> {
+    const command = new CreateUserCommand(dto.email, dto.name, dto.phone);
+    return this.commandBus.execute(command);
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Get user by ID' })
+  async getUserById(@Param('id') id: string): Promise<User> {
+    const query = new GetUserByIdQuery(id);
+    const user = await this.queryBus.execute(query);
+    
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    
+    return user;
+  }
+
+  @Get()
+  @ApiOperation({ summary: 'Get users with pagination' })
+  async getUsers(@Query() dto: GetUsersDto): Promise<PaginatedResult<User>> {
+    const query = new GetUsersQuery(dto.page, dto.limit, dto.search);
+    return this.queryBus.execute(query);
+  }
+}
+```
+
+## Module Configuration
+
+### CQRS Module Setup
+```typescript
+import { Module } from '@nestjs/common';
+import { CqrsModule } from '@nestjs/cqrs';
+
+// Import all handlers
+import { CreateUserHandler } from './commands/handlers/create-user.handler';
+import { GetUserByIdHandler } from './queries/handlers/get-user-by-id.handler';
+import { GetUsersHandler } from './queries/handlers/get-users.handler';
+import { UserCreatedHandler } from './events/handlers/user-created.handler';
+
+const CommandHandlers = [
+  CreateUserHandler,
+];
+
+const QueryHandlers = [
+  GetUserByIdHandler,
+  GetUsersHandler,
+];
+
+const EventHandlers = [
+  UserCreatedHandler,
+];
+
+@Module({
+  imports: [CqrsModule],
+  controllers: [UserController],
+  providers: [
+    ...CommandHandlers,
+    ...QueryHandlers,
+    ...EventHandlers,
+    UserRepository,
+    EmailService,
+  ],
+  exports: [
+    ...CommandHandlers,
+    ...QueryHandlers,
+  ],
+})
+export class UserModule {}
+```
+
+## Best Practices
+
+### Command Guidelines
+1. **Commands should be imperative** - Use verbs like Create, Update, Delete
+2. **Commands should be immutable** - Use readonly properties
+3. **Commands should contain all necessary data** - Avoid additional lookups in handlers
+4. **Commands should represent business intentions** - Not just CRUD operations
+
+### Query Guidelines
+1. **Queries should be descriptive** - Use clear naming like GetUserById
+2. **Queries should be immutable** - Use readonly properties
+3. **Queries should not modify state** - Only read operations
+4. **Queries can be cached** - Consider caching for performance
+
+### Handler Guidelines
+1. **Handlers should be focused** - One handler per command/query
+2. **Handlers should contain business logic** - Not just data access
+3. **Handlers should be testable** - Use dependency injection
+4. **Handlers should handle errors** - Proper exception handling
+
+### Event Guidelines
+1. **Events should be past tense** - UserCreated, OrderProcessed
+2. **Events should be immutable** - Use readonly properties
+3. **Events should contain relevant data** - Include what subscribers need
+4. **Event handlers should be resilient** - Don't throw exceptions
+
+## Error Handling
+
+### Command Error Handling
+```typescript
+@CommandHandler(CreateUserCommand)
+export class CreateUserHandler implements ICommandHandler<CreateUserCommand> {
+  async execute(command: CreateUserCommand): Promise<User> {
+    try {
+      // Business logic here
+      return await this.userRepository.create(userData);
+    } catch (error) {
+      if (error instanceof UniqueConstraintError) {
+        throw new ConflictException('User already exists');
+      }
+      
+      this.logger.error('Failed to create user', error);
+      throw new InternalServerErrorException('User creation failed');
+    }
+  }
+}
+```
+
+### Query Error Handling
+```typescript
+@QueryHandler(GetUserByIdQuery)
+export class GetUserByIdHandler implements IQueryHandler<GetUserByIdQuery> {
+  async execute(query: GetUserByIdQuery): Promise<User | null> {
+    try {
+      return await this.userRepository.findById(query.userId);
+    } catch (error) {
+      this.logger.error(`Failed to get user ${query.userId}`, error);
+      throw new InternalServerErrorException('Failed to retrieve user');
+    }
+  }
+}
+```
+
+## Testing
+
+### Command Handler Testing
+```typescript
+describe('CreateUserHandler', () => {
+  let handler: CreateUserHandler;
+  let repository: jest.Mocked<UserRepository>;
+  let eventBus: jest.Mocked<EventBus>;
+
+  beforeEach(async () => {
+    const module = await Test.createTestingModule({
+      providers: [
+        CreateUserHandler,
+        {
+          provide: UserRepository,
+          useValue: {
+            findByEmail: jest.fn(),
+            create: jest.fn(),
+          },
+        },
+        {
+          provide: EventBus,
+          useValue: {
+            publish: jest.fn(),
+          },
+        },
+      ],
+    }).compile();
+
+    handler = module.get<CreateUserHandler>(CreateUserHandler);
+    repository = module.get(UserRepository);
+    eventBus = module.get(EventBus);
+  });
+
+  it('should create user successfully', async () => {
+    const command = new CreateUserCommand('test@example.com', 'John Doe');
+    const expectedUser = { id: '1', email: 'test@example.com', name: 'John Doe' };
+
+    repository.findByEmail.mockResolvedValue(null);
+    repository.create.mockResolvedValue(expectedUser);
+
+    const result = await handler.execute(command);
+
+    expect(result).toEqual(expectedUser);
+    expect(eventBus.publish).toHaveBeenCalledWith(
+      expect.any(UserCreatedEvent)
+    );
+  });
+
+  it('should throw conflict exception if user exists', async () => {
+    const command = new CreateUserCommand('test@example.com', 'John Doe');
+    const existingUser = { id: '1', email: 'test@example.com' };
+
+    repository.findByEmail.mockResolvedValue(existingUser);
+
+    await expect(handler.execute(command)).rejects.toThrow(ConflictException);
+  });
+});
+```
+
+## Directory Structure
+
+```
+src/
+├── modules/
+│   └── users/
+│       ├── commands/
+│       │   ├── create-user.command.ts
+│       │   ├── update-user.command.ts
+│       │   └── handlers/
+│       │       ├── create-user.handler.ts
+│       │       └── update-user.handler.ts
+│       ├── queries/
+│       │   ├── get-user-by-id.query.ts
+│       │   ├── get-users.query.ts
+│       │   └── handlers/
+│       │       ├── get-user-by-id.handler.ts
+│       │       └── get-users.handler.ts
+│       ├── events/
+│       │   ├── user-created.event.ts
+│       │   └── handlers/
+│       │       └── user-created.handler.ts
+│       ├── dto/
+│       ├── controllers/
+│       └── user.module.ts
+```
+
+## Common Anti-Patterns
+
+1. **Don't put business logic in controllers** - Use command/query handlers
+2. **Don't make commands/queries mutable** - Use readonly properties
+3. **Don't query in command handlers** - Commands should only write
+4. **Don't modify state in query handlers** - Queries should only read
+5. **Don't throw exceptions in event handlers** - Events should be resilient
+6. **Don't make handlers dependent on each other** - Keep them isolated
+7. **Don't forget to register handlers** - Add them to module providers
+8. **Don't skip testing** - Test all handlers thoroughly 

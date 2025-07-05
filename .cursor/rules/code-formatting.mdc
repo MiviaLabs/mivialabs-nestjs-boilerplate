@@ -1,0 +1,459 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Code Formatting & Style Guide
+
+## Overview
+This rule ensures consistent code formatting and style to avoid Prettier and ESLint conflicts when generating code.
+
+## Core Formatting Rules
+
+### 1. Object and Array Formatting
+Use consistent formatting for objects and arrays:
+
+```typescript
+// ✅ GOOD - Multi-line object formatting
+const config = {
+  host: 'localhost',
+  port: 3000,
+  database: 'myapp',
+};
+
+// ✅ GOOD - Single-line for simple objects
+const point = { x: 10, y: 20 };
+
+// ✅ GOOD - Array formatting
+const items = [
+  'item1',
+  'item2',
+  'item3',
+];
+
+// ✅ GOOD - Single-line for simple arrays
+const numbers = [1, 2, 3];
+```
+
+### 2. Function and Method Formatting
+Consistent function formatting:
+
+```typescript
+// ✅ GOOD - Arrow function with parentheses
+const processItems = (items: Item[]) => {
+  return items.map((item) => item.name);
+};
+
+// ✅ GOOD - Multi-line function parameters
+const complexFunction = (
+  param1: string,
+  param2: number,
+  param3: ComplexType,
+) => {
+  // Implementation
+};
+
+// ✅ GOOD - Method formatting
+class UserService {
+  async createUser(
+    userData: CreateUserDto,
+    options?: CreateOptions,
+  ): Promise<User> {
+    // Implementation
+  }
+}
+```
+
+### 3. Import/Export Formatting
+Organize imports consistently:
+
+```typescript
+// ✅ GOOD - Import grouping and formatting
+import { Injectable, Logger } from '@nestjs/common';
+import { CommandHandler, ICommandHandler } from '@nestjs/cqrs';
+
+import { UserRepository } from '../repositories/user.repository';
+import { CreateUserCommand } from '../commands/create-user.command';
+import { User } from '../entities/user.entity';
+
+// ✅ GOOD - Multi-line imports
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsNumber,
+} from 'class-validator';
+
+// ✅ GOOD - Export formatting
+export {
+  UserService,
+  UserRepository,
+  CreateUserCommand,
+} from './user';
+```
+
+### 4. Conditional and Expression Formatting
+Format complex expressions properly:
+
+```typescript
+// ✅ GOOD - Multi-line conditional
+const result = condition1 && condition2
+  ? 'value1'
+  : condition3
+  ? 'value2'
+  : 'default';
+
+// ✅ GOOD - Long expression formatting
+const isValid = 
+  user.isActive &&
+  user.hasPermission &&
+  user.isVerified &&
+  !user.isBlocked;
+
+// ✅ GOOD - Method chaining
+const processedData = data
+  .filter((item) => item.isActive)
+  .map((item) => item.name)
+  .sort((a, b) => a.localeCompare(b));
+```
+
+## Test-Specific Formatting
+
+### 5. Test Structure Formatting
+Consistent test formatting:
+
+```typescript
+// ✅ GOOD - Test describe blocks
+describe('UserService', () => {
+  let service: UserService;
+  let mockRepository: jest.Mocked<UserRepository>;
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        UserService,
+        {
+          provide: UserRepository,
+          useValue: createMockRepository(),
+        },
+      ],
+    }).compile();
+
+    service = module.get<UserService>(UserService);
+    mockRepository = module.get(UserRepository);
+  });
+
+  describe('createUser', () => {
+    it('should create user successfully', async () => {
+      // Arrange
+      const userData = {
+        email: 'test@example.com',
+        name: 'John Doe',
+      };
+
+      // Act
+      const result = await service.createUser(userData);
+
+      // Assert
+      expect(result).toEqual(
+        expect.objectContaining({
+          email: userData.email,
+          name: userData.name,
+        }),
+      );
+    });
+  });
+});
+```
+
+### 6. Expectation Formatting
+Format test expectations consistently:
+
+```typescript
+// ✅ GOOD - Multi-line expectations
+expect(dto.metadata?.custom_metadata).toEqual({
+  environment: 'production',
+  version: '1.0.0',
+});
+
+// ✅ GOOD - Complex expectation formatting
+expect(
+  'error' in response ? response.error : undefined,
+).toBeUndefined();
+
+// ✅ GOOD - Array expectations
+expect(errors.map((error) => error.property)).toEqual([
+  'workspaceId',
+  'credentialId',
+  'secret',
+]);
+```
+
+## String and Template Formatting
+
+### 7. String Formatting
+Use consistent string formatting:
+
+```typescript
+// ✅ GOOD - Template literals for interpolation
+const message = `User ${user.name} created successfully`;
+
+// ✅ GOOD - Multi-line strings
+const query = `
+  SELECT u.id, u.name, u.email
+  FROM users u
+  WHERE u.active = true
+    AND u.created_at > $1
+  ORDER BY u.created_at DESC
+`;
+
+// ✅ GOOD - String concatenation for simple cases
+const url = baseUrl + '/api/users';
+```
+
+### 8. JSX/Template Formatting (if applicable)
+For any template or JSX-like syntax:
+
+```typescript
+// ✅ GOOD - Multi-line JSX-style formatting
+const template = (
+  <div className="user-card">
+    <h2>{user.name}</h2>
+    <p>{user.email}</p>
+  </div>
+);
+```
+
+## Comment and Documentation Formatting
+
+### 9. Comment Formatting
+Use consistent comment styles:
+
+```typescript
+// ✅ GOOD - Single-line comments
+// This is a single-line comment
+
+// ✅ GOOD - Multi-line comments
+/**
+ * This is a multi-line comment
+ * that explains complex logic
+ */
+
+// ✅ GOOD - JSDoc formatting
+/**
+ * Creates a new user in the system
+ * 
+ * @param userData - The user data to create
+ * @param options - Optional creation options
+ * @returns Promise resolving to the created user
+ * @throws {ConflictException} When user already exists
+ */
+async createUser(
+  userData: CreateUserDto,
+  options?: CreateOptions,
+): Promise<User> {
+  // Implementation
+}
+```
+
+## Decorator and Annotation Formatting
+
+### 10. Decorator Formatting
+Format decorators consistently:
+
+```typescript
+// ✅ GOOD - Single decorator per line
+@Injectable()
+@Controller('users')
+export class UserController {
+  @Post()
+  @ApiOperation({ summary: 'Create user' })
+  @ApiResponse({
+    status: 201,
+    description: 'User created successfully',
+    type: UserResponseDto,
+  })
+  async createUser(
+    @Body() dto: CreateUserDto,
+  ): Promise<UserResponseDto> {
+    // Implementation
+  }
+}
+
+// ✅ GOOD - Validation decorators
+export class CreateUserDto {
+  @ApiProperty({
+    description: 'User email address',
+    example: 'user@example.com',
+  })
+  @IsEmail()
+  @IsNotEmpty()
+  email: string;
+
+  @ApiPropertyOptional({
+    description: 'User age',
+    minimum: 18,
+    maximum: 120,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(18)
+  @Max(120)
+  age?: number;
+}
+```
+
+## Error and Exception Formatting
+
+### 11. Error Handling Formatting
+Format error handling consistently:
+
+```typescript
+// ✅ GOOD - Try-catch formatting
+try {
+  const result = await this.performOperation();
+  return result;
+} catch (error) {
+  if (error instanceof SpecificError) {
+    throw new BadRequestException(error.message);
+  }
+  
+  this.logger.error('Operation failed', error);
+  throw new InternalServerErrorException(
+    'Failed to perform operation',
+  );
+}
+
+// ✅ GOOD - Error throwing
+throw new ConflictException(
+  `User with email ${email} already exists`,
+);
+```
+
+## Type Definition Formatting
+
+### 12. Interface and Type Formatting
+Format type definitions consistently:
+
+```typescript
+// ✅ GOOD - Interface formatting
+export interface UserProfile {
+  id: string;
+  email: string;
+  name: string;
+  age?: number;
+  preferences: {
+    theme: 'light' | 'dark';
+    notifications: boolean;
+  };
+  metadata?: Record<string, unknown>;
+}
+
+// ✅ GOOD - Union type formatting
+export type UserStatus = 
+  | 'active'
+  | 'inactive'
+  | 'pending'
+  | 'suspended';
+
+// ✅ GOOD - Generic type formatting
+export interface ApiResponse<T = unknown> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  metadata?: {
+    timestamp: string;
+    requestId: string;
+  };
+}
+```
+
+## Configuration and Constants
+
+### 13. Configuration Formatting
+Format configuration objects consistently:
+
+```typescript
+// ✅ GOOD - Configuration object
+export const databaseConfig = {
+  host: process.env.DB_HOST || 'localhost',
+  port: parseInt(process.env.DB_PORT || '5432', 10),
+  database: process.env.DB_NAME || 'myapp',
+  username: process.env.DB_USER || 'postgres',
+  password: process.env.DB_PASSWORD || 'password',
+  ssl: process.env.NODE_ENV === 'production',
+  logging: process.env.NODE_ENV === 'development',
+};
+
+// ✅ GOOD - Constants formatting
+export const API_ENDPOINTS = {
+  USERS: '/api/users',
+  ORDERS: '/api/orders',
+  PAYMENTS: '/api/payments',
+} as const;
+
+export const HTTP_STATUS_CODES = {
+  OK: 200,
+  CREATED: 201,
+  BAD_REQUEST: 400,
+  UNAUTHORIZED: 401,
+  NOT_FOUND: 404,
+  INTERNAL_SERVER_ERROR: 500,
+} as const;
+```
+
+## Quick Reference
+
+### Prettier Configuration
+Ensure your `.prettierrc` includes:
+
+```json
+{
+  "semi": true,
+  "trailingComma": "all",
+  "singleQuote": true,
+  "printWidth": 80,
+  "tabWidth": 2,
+  "useTabs": false,
+  "bracketSpacing": true,
+  "arrowParens": "always"
+}
+```
+
+### ESLint Rules for Formatting
+Key ESLint rules to follow:
+
+```javascript
+{
+  "rules": {
+    "prettier/prettier": "error",
+    "@typescript-eslint/no-unused-vars": "error",
+    "@typescript-eslint/explicit-function-return-type": "warn",
+    "prefer-const": "error",
+    "no-var": "error",
+    "object-shorthand": "error",
+    "prefer-template": "error"
+  }
+}
+```
+
+### Common Formatting Fixes
+1. **Trailing commas**: Always add trailing commas in multi-line structures
+2. **Arrow functions**: Use parentheses around parameters `(param) => {}`
+3. **Object spacing**: Use consistent spacing in objects `{ key: value }`
+4. **Line length**: Break long lines at 80 characters
+5. **Semicolons**: Always use semicolons
+6. **Quotes**: Use single quotes for strings, double quotes for JSX
+7. **Indentation**: Use 2 spaces, no tabs
+
+### Formatting Checklist
+- [ ] Consistent indentation (2 spaces)
+- [ ] Trailing commas in multi-line structures
+- [ ] Single quotes for strings
+- [ ] Semicolons at end of statements
+- [ ] Proper line breaks for readability
+- [ ] Consistent spacing around operators
+- [ ] Proper import/export organization
+- [ ] Consistent decorator formatting
+- [ ] Proper error handling formatting
+- [ ] Consistent test structure formatting

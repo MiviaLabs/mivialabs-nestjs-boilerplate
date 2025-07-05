@@ -1,0 +1,621 @@
+---
+description: routes creation, create route, create dto, validation
+globs: 
+alwaysApply: false
+---
+# API Design Rules
+
+## RESTful API Guidelines
+
+### HTTP Methods
+Use appropriate HTTP methods for different operations:
+
+- **GET**: Retrieve data (idempotent, safe)
+- **POST**: Create new resources
+- **PUT**: Update entire resource (idempotent)
+- **PATCH**: Partial update of resource
+- **DELETE**: Remove resource (idempotent)
+
+```typescript
+@Controller('users')
+export class UserController {
+  @Get()           // GET /users - List users
+  @Get(':id')      // GET /users/123 - Get specific user
+  @Post()          // POST /users - Create user
+  @Put(':id')      // PUT /users/123 - Update entire user
+  @Patch(':id')    // PATCH /users/123 - Partial update
+  @Delete(':id')   // DELETE /users/123 - Delete user
+}
+```
+
+### URL Structure
+Follow RESTful URL conventions:
+
+```typescript
+// Good
+GET    /users              // List users
+GET    /users/123          // Get user by ID
+POST   /users              // Create user
+PUT    /users/123          // Update user
+DELETE /users/123          // Delete user
+GET    /users/123/posts    // Get user's posts
+
+// Bad
+GET    /getUsers
+POST   /createUser
+GET    /user?id=123
+DELETE /deleteUser/123
+```
+
+### Status Codes
+Use appropriate HTTP status codes:
+
+```typescript
+@Controller('users')
+export class UserController {
+  @Post()
+  @HttpCode(201) // Created
+  async createUser(@Body() dto: CreateUserDto) {
+    return this.userService.create(dto);
+  }
+
+  @Get(':id')
+  async getUser(@Param('id') id: string) {
+    const user = await this.userService.findById(id);
+    if (!user) {
+      throw new NotFoundException('User not found'); // 404
+    }
+    return user; // 200
+  }
+
+  @Put(':id')
+  async updateUser(@Param('id') id: string, @Body() dto: UpdateUserDto) {
+    const user = await this.userService.update(id, dto);
+    if (!user) {
+      throw new NotFoundException('User not found'); // 404
+    }
+    return user; // 200
+  }
+
+  @Delete(':id')
+  @HttpCode(204) // No Content
+  async deleteUser(@Param('id') id: string) {
+    await this.userService.delete(id);
+  }
+}
+```
+
+## Request/Response Format
+
+### Request DTOs
+Always use DTOs for request validation:
+
+```typescript
+export class CreateUserDto {
+  @IsString()
+  @IsNotEmpty()
+  @ApiProperty({ description: 'User name', example: 'John Doe' })
+  name: string;
+
+  @IsEmail()
+  @ApiProperty({ description: 'User email', example: 'john@example.com' })
+  email: string;
+
+  @IsPhoneNumber()
+  @IsOptional()
+  @ApiProperty({ description: 'Phone number', example: '+5511999999999', required: false })
+  phone?: string;
+
+  @IsString()
+  @IsIn(['admin', 'user', 'moderator'])
+  @IsOptional()
+  @ApiProperty({ description: 'User role', enum: ['admin', 'user', 'moderator'], default: 'user' })
+  role?: string;
+}
+```
+
+### Response Format
+Use consistent response format:
+
+```typescript
+// Success Response
+interface ApiResponse<T> {
+  data: T;
+  message?: string;
+  pagination?: PaginationInfo;
+}
+
+// Error Response
+interface ErrorResponse {
+  error: string;
+  message: string;
+  statusCode: number;
+  timestamp: string;
+  path: string;
+  details?: ValidationError[];
+}
+
+// Pagination Info
+interface PaginationInfo {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  hasNext: boolean;
+  hasPrev: boolean;
+}
+```
+
+### Pagination
+Implement consistent pagination:
+
+```typescript
+export class PaginationDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @ApiProperty({ description: 'Page number', example: 1, default: 1 })
+  page?: number = 1;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  @ApiProperty({ description: 'Items per page', example: 20, default: 20 })
+  limit?: number = 20;
+
+  @IsOptional()
+  @IsString()
+  @ApiProperty({ description: 'Search term', required: false })
+  search?: string;
+}
+
+@Controller('users')
+export class UserController {
+  @Get()
+  async getUsers(@Query() pagination: PaginationDto) {
+    const result = await this.userService.findMany(pagination);
+    
+    return {
+      data: result.items,
+      pagination: {
+        page: pagination.page,
+        limit: pagination.limit,
+        total: result.total,
+        totalPages: Math.ceil(result.total / pagination.limit),
+        hasNext: pagination.page * pagination.limit < result.total,
+        hasPrev: pagination.page > 1,
+      },
+    };
+  }
+}
+```
+
+## Validation
+
+### Input Validation
+Use class-validator for comprehensive validation:
+
+```typescript
+export class CreatePostDto {
+  @IsString()
+  @IsNotEmpty()
+  @Length(1, 200)
+  @ApiProperty({ description: 'Post title', minLength: 1, maxLength: 200 })
+  title: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @Length(1, 5000)
+  @ApiProperty({ description: 'Post content', minLength: 1, maxLength: 5000 })
+  content: string;
+
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  @ApiProperty({ description: 'Post tags', type: [String], required: false })
+  tags?: string[];
+
+  @IsBoolean()
+  @IsOptional()
+  @ApiProperty({ description: 'Is post published', default: false })
+  published?: boolean = false;
+
+  @IsDateString()
+  @IsOptional()
+  @ApiProperty({ description: 'Publish date', required: false })
+  publishAt?: string;
+}
+```
+
+### Custom Validators
+Create custom validators for business rules:
+
+```typescript
+import { ValidatorConstraint, ValidatorConstraintInterface, ValidationArguments } from 'class-validator';
+
+@ValidatorConstraint({ name: 'isUniqueEmail', async: true })
+export class IsUniqueEmailConstraint implements ValidatorConstraintInterface {
+  constructor(private userService: UserService) {}
+
+  async validate(email: string, args: ValidationArguments) {
+    const user = await this.userService.findByEmail(email);
+    return !user;
+  }
+
+  defaultMessage(args: ValidationArguments) {
+    return 'Email already exists';
+  }
+}
+
+export function IsUniqueEmail(validationOptions?: ValidationOptions) {
+  return function (object: Object, propertyName: string) {
+    registerDecorator({
+      target: object.constructor,
+      propertyName: propertyName,
+      options: validationOptions,
+      constraints: [],
+      validator: IsUniqueEmailConstraint,
+    });
+  };
+}
+
+// Usage
+export class CreateUserDto {
+  @IsEmail()
+  @IsUniqueEmail()
+  email: string;
+}
+```
+
+## Error Handling
+
+### Global Exception Filter
+Implement consistent error responses:
+
+```typescript
+@Catch()
+export class GlobalExceptionFilter implements ExceptionFilter {
+  private readonly logger = new Logger(GlobalExceptionFilter.name);
+
+  catch(exception: unknown, host: ArgumentsHost) {
+    const ctx = host.switchToHttp();
+    const response = ctx.getResponse<Response>();
+    const request = ctx.getRequest<Request>();
+
+    let status = 500;
+    let message = 'Internal server error';
+    let details: any = undefined;
+
+    if (exception instanceof HttpException) {
+      status = exception.getStatus();
+      const exceptionResponse = exception.getResponse();
+      
+      if (typeof exceptionResponse === 'object') {
+        message = (exceptionResponse as any).message || exception.message;
+        details = (exceptionResponse as any).details;
+      } else {
+        message = exceptionResponse;
+      }
+    } else if (exception instanceof Error) {
+      message = exception.message;
+    }
+
+    // Log error
+    this.logger.error(
+      `${request.method} ${request.url} - ${status} - ${message}`,
+      exception instanceof Error ? exception.stack : exception,
+    );
+
+    const errorResponse = {
+      error: HttpStatus[status] || 'Unknown Error',
+      message,
+      statusCode: status,
+      timestamp: new Date().toISOString(),
+      path: request.url,
+      ...(details && { details }),
+    };
+
+    response.status(status).json(errorResponse);
+  }
+}
+```
+
+### Validation Error Handling
+Handle validation errors properly:
+
+```typescript
+// In main.ts
+app.useGlobalPipes(
+  new ValidationPipe({
+    whitelist: true,
+    forbidNonWhitelisted: true,
+    transform: true,
+    exceptionFactory: (errors: ValidationError[]) => {
+      const details = errors.map(error => ({
+        field: error.property,
+        message: Object.values(error.constraints || {}).join(', '),
+        value: error.value,
+      }));
+
+      return new BadRequestException({
+        message: 'Validation failed',
+        details,
+      });
+    },
+  }),
+);
+```
+
+## Swagger Documentation
+
+### Controller Documentation
+Comprehensive API documentation:
+
+```typescript
+@Controller('users')
+@ApiTags('Users')
+@ApiBearerAuth()
+export class UserController {
+  @Post()
+  @ApiOperation({ 
+    summary: 'Create a new user',
+    description: 'Creates a new user account with the provided information'
+  })
+  @ApiBody({ type: CreateUserDto })
+  @ApiResponse({ 
+    status: 201, 
+    description: 'User created successfully',
+    type: User
+  })
+  @ApiResponse({ 
+    status: 400, 
+    description: 'Validation failed',
+    schema: {
+      type: 'object',
+      properties: {
+        error: { type: 'string', example: 'Bad Request' },
+        message: { type: 'string', example: 'Validation failed' },
+        details: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              field: { type: 'string', example: 'email' },
+              message: { type: 'string', example: 'must be an email' }
+            }
+          }
+        }
+      }
+    }
+  })
+  @ApiResponse({ 
+    status: 409, 
+    description: 'User already exists' 
+  })
+  async createUser(@Body() dto: CreateUserDto): Promise<User> {
+    return this.userService.create(dto);
+  }
+}
+```
+
+### DTO Documentation
+Document all DTO properties:
+
+```typescript
+export class CreateUserDto {
+  @ApiProperty({
+    description: 'User full name',
+    example: 'John Doe',
+    minLength: 2,
+    maxLength: 100
+  })
+  @IsString()
+  @Length(2, 100)
+  name: string;
+
+  @ApiProperty({
+    description: 'User email address',
+    example: 'john.doe@example.com',
+    format: 'email'
+  })
+  @IsEmail()
+  email: string;
+
+  @ApiProperty({
+    description: 'User role in the system',
+    enum: UserRole,
+    default: UserRole.USER,
+    example: UserRole.USER
+  })
+  @IsEnum(UserRole)
+  @IsOptional()
+  role?: UserRole = UserRole.USER;
+}
+```
+
+## Versioning
+
+### API Versioning Strategy
+Implement proper API versioning:
+
+```typescript
+// Version in URL
+@Controller({ path: 'users', version: '1' })
+export class UsersV1Controller {
+  // Implementation
+}
+
+@Controller({ path: 'users', version: '2' })
+export class UsersV2Controller {
+  // Implementation
+}
+
+// In main.ts
+app.enableVersioning({
+  type: VersioningType.URI,
+  prefix: 'v',
+});
+```
+
+### Backward Compatibility
+Maintain backward compatibility:
+
+```typescript
+// V1 Response
+interface UserV1 {
+  id: string;
+  name: string;
+  email: string;
+}
+
+// V2 Response (extended)
+interface UserV2 extends UserV1 {
+  firstName: string;
+  lastName: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+@Controller({ path: 'users', version: '2' })
+export class UsersV2Controller {
+  @Get(':id')
+  async getUser(@Param('id') id: string): Promise<UserV2> {
+    return this.userService.findByIdV2(id);
+  }
+}
+```
+
+## Performance Considerations
+
+### Caching
+Implement appropriate caching:
+
+```typescript
+@Controller('users')
+export class UserController {
+  @Get(':id')
+  @CacheKey('user')
+  @CacheTTL(300) // 5 minutes
+  async getUser(@Param('id') id: string) {
+    return this.userService.findById(id);
+  }
+}
+```
+
+### Query Optimization
+Optimize database queries:
+
+```typescript
+@Get()
+async getUsers(
+  @Query() pagination: PaginationDto,
+  @Query('include') include?: string[]
+) {
+  const options = {
+    ...pagination,
+    include: include || [], // Only include requested relations
+  };
+  
+  return this.userService.findMany(options);
+}
+```
+
+## Security
+
+### Input Sanitization
+Sanitize user inputs:
+
+```typescript
+export class CreatePostDto {
+  @IsString()
+  @Transform(({ value }) => value.trim())
+  @Matches(/^[a-zA-Z0-9\s\-_.,!?]+$/, {
+    message: 'Title contains invalid characters'
+  })
+  title: string;
+
+  @IsString()
+  @Transform(({ value }) => sanitizeHtml(value))
+  content: string;
+}
+```
+
+### Rate Limiting
+Implement rate limiting:
+
+```typescript
+@Controller('auth')
+@UseGuards(ThrottlerGuard)
+export class AuthController {
+  @Post('login')
+  @Throttle(5, 60) // 5 attempts per minute
+  async login(@Body() dto: LoginDto) {
+    return this.authService.login(dto);
+  }
+}
+```
+
+## Testing
+
+### API Testing
+Test API endpoints thoroughly:
+
+```typescript
+describe('UserController (e2e)', () => {
+  let app: INestApplication;
+
+  beforeEach(async () => {
+    const moduleFixture: TestingModule = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile();
+
+    app = moduleFixture.createNestApplication();
+    await app.init();
+  });
+
+  describe('POST /users', () => {
+    it('should create user with valid data', () => {
+      return request(app.getHttpServer())
+        .post('/users')
+        .send({
+          name: 'John Doe',
+          email: 'john@example.com',
+        })
+        .expect(201)
+        .expect((res) => {
+          expect(res.body.name).toBe('John Doe');
+          expect(res.body.email).toBe('john@example.com');
+        });
+    });
+
+    it('should return 400 for invalid email', () => {
+      return request(app.getHttpServer())
+        .post('/users')
+        .send({
+          name: 'John Doe',
+          email: 'invalid-email',
+        })
+        .expect(400)
+        .expect((res) => {
+          expect(res.body.message).toBe('Validation failed');
+        });
+    });
+  });
+});
+```
+
+## Common Anti-Patterns
+
+1. **Don't use verbs in URLs** - Use nouns and HTTP methods
+2. **Don't ignore HTTP status codes** - Use appropriate codes
+3. **Don't skip validation** - Always validate inputs
+4. **Don't expose internal errors** - Return user-friendly messages
+5. **Don't forget pagination** - Implement for list endpoints
+6. **Don't skip documentation** - Document all endpoints
+7. **Don't ignore versioning** - Plan for API evolution
+8. **Don't skip error handling** - Handle all error cases
+9. **Don't use inconsistent naming** - Follow conventions
+10. **Don't forget security** - Implement proper authentication/authorization 
