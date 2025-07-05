@@ -1,98 +1,197 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# HirePanel API
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+A modern, enterprise-grade hiring management system built with NestJS, designed to streamline recruitment processes for organizations of all sizes.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Overview
 
-## Description
+HirePanel API is a robust backend service that provides comprehensive hiring management capabilities, including candidate tracking, interview scheduling, and organizational management. Built with modern technologies and following enterprise best practices, it offers scalability, security, and maintainability for complex recruitment workflows.
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## Features
 
-## Project setup
+- **Organization Management**: Multi-tenant architecture supporting multiple organizations
+- **Database Management**: PostgreSQL with Drizzle ORM for type-safe database operations
+- **Message Queue**: RabbitMQ integration for asynchronous task processing
+- **Caching**: Redis for high-performance data caching
+- **Job Queue**: BullMQ for background job processing
+- **Authentication**: Secure password hashing with Argon2
+- **API Documentation**: OpenAPI/Swagger integration
+- **CQRS Pattern**: Command Query Responsibility Segregation for scalable architecture
+- **Validation**: Comprehensive input validation with class-validator and Zod
+- **Testing**: Full test suite with Jest for unit and e2e tests
 
-```bash
-$ npm install
+## Technology Stack
+
+### Core Framework
+- **NestJS**: Enterprise-grade Node.js framework
+- **TypeScript**: Type-safe JavaScript development
+- **Express**: Web application framework
+
+### Database & ORM
+- **PostgreSQL**: Primary database with pgvector extension
+- **Drizzle ORM**: Type-safe database toolkit
+- **Drizzle Kit**: Database migration and management
+
+### Message Brokers & Queues
+- **RabbitMQ**: Message broker for inter-service communication
+- **BullMQ**: Redis-based queue for background jobs
+- **Redis**: In-memory data store for caching and sessions
+
+### Security & Validation
+- **Argon2**: Password hashing
+- **Class Validator**: DTO validation
+- **Zod**: Schema validation
+- **AJV**: JSON schema validation
+
+### Development Tools
+- **ESLint**: Code linting
+- **Prettier**: Code formatting
+- **Jest**: Testing framework
+- **SWC**: Fast TypeScript/JavaScript compiler
+
+## Project Structure
+
+```
+hirepanel-api/
+├── src/                          # Application source code
+│   ├── app.module.ts            # Main application module
+│   ├── app.controller.ts        # Main application controller
+│   ├── app.service.ts           # Main application service
+│   └── main.ts                  # Application entry point
+├── libs/                        # Shared libraries
+│   └── db/                      # Database library
+│       └── src/
+│           └── postgres/        # PostgreSQL configurations
+│               ├── schema/      # Database schemas
+│               ├── migrations/  # Database migrations
+│               └── seeds/       # Database seed data
+├── docker/                      # Docker configurations
+│   ├── rabbitmq/               # RabbitMQ setup
+│   └── vault/                  # HashiCorp Vault setup
+├── test/                       # Test files
+└── docker-compose.yml          # Multi-service Docker setup
 ```
 
-## Compile and run the project
+## Prerequisites
+
+- Node.js 18+ and npm
+- Docker and Docker Compose
+- PostgreSQL 16+
+- Redis 7+
+- RabbitMQ 3.13+
+
+## Quick Start
+
+### 1. Environment Setup
 
 ```bash
-# development
-$ npm run start
+# Clone the repository
+git clone <repository-url>
+cd hirepanel-api
 
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+# Install dependencies
+npm install
 ```
 
-## Run tests
+### 2. Database Setup
 
 ```bash
-# unit tests
-$ npm run test
+# Start services with Docker Compose
+docker-compose up -d
 
-# e2e tests
-$ npm run test:e2e
+# Run database migrations
+npm run db:migration:run
 
-# test coverage
-$ npm run test:cov
+# Seed the database (optional)
+npm run db:seed
 ```
 
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+### 3. Development
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+# Start in development mode
+npm run start:dev
+
+# Or start in debug mode
+npm run start:debug
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+The API will be available at `http://localhost:3000`
 
-## Resources
+## Available Scripts
 
-Check out a few resources that may come in handy when working with NestJS:
+### Development
+- `npm run start:dev` - Start in development mode with hot reload
+- `npm run start:debug` - Start in debug mode
+- `npm run start:prod` - Start in production mode
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+### Database Operations
+- `npm run db:studio` - Open Drizzle Studio for database management
+- `npm run db:migration:generate` - Generate new migration
+- `npm run db:migration:run` - Run pending migrations
+- `npm run db:seed` - Seed database with initial data
 
-## Support
+### Code Quality
+- `npm run lint` - Run ESLint and TypeScript checks
+- `npm run lint:eslint` - Run ESLint only
+- `npm run lint:types` - Run TypeScript type checking
+- `npm run format` - Format code with Prettier
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+### Testing
+- `npm run test` - Run unit tests
+- `npm run test:watch` - Run tests in watch mode
+- `npm run test:cov` - Run tests with coverage report
+- `npm run test:e2e` - Run end-to-end tests
 
-## Stay in touch
+### Build
+- `npm run build` - Build the application for production
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+## Services
+
+### Core Services
+- **API Server**: Main NestJS application (Port 3000)
+- **PostgreSQL**: Database server (Port 5433)
+- **Redis**: Cache and session store (Port 6379)
+- **RabbitMQ**: Message broker (Port 5672, Management UI: 15672)
+- **MinIO**: Object storage (Port 9000, Console: 9001)
+
+### Service URLs
+- API Documentation: `http://localhost:3000/api/docs`
+- RabbitMQ Management: `http://localhost:15672`
+- MinIO Console: `http://localhost:9001`
+- Drizzle Studio: `npm run db:studio`
+
+## Architecture
+
+The application follows enterprise architecture patterns:
+
+- **CQRS**: Separates read and write operations for better scalability
+- **Multi-tenant**: Supports multiple organizations with data isolation
+- **Microservices Ready**: Designed for easy service decomposition
+- **Event-Driven**: Uses message queues for asynchronous processing
+- **Type-Safe**: Full TypeScript coverage with strict type checking
+
+## Development Guidelines
+
+This project follows strict development conventions outlined in `CLAUDE.md`:
+
+- **TypeScript**: Explicit typing required for all functions and variables
+- **File Organization**: Separate files for entities, interfaces, enums, and types
+- **Commit Messages**: Conventional commits with type, scope, and description
+- **Code Style**: ESLint and Prettier configurations enforced
+- **Security**: Secure authentication, input validation, and error handling
+
+## Contributing
+
+1. Follow the development rules in `CLAUDE.md`
+2. Run tests before submitting: `npm run test`
+3. Ensure code quality: `npm run lint`
+4. Use conventional commit messages
+5. Include appropriate tests for new features
 
 ## License
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+This project is licensed under the UNLICENSED license - see the package.json file for details.
+
+## Support
+
+For questions and support, please refer to the project documentation or contact the development team.
