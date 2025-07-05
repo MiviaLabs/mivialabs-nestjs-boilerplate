@@ -7,12 +7,18 @@
   "license": "UNLICENSED",
   "scripts": {
     "build": "nest build",
-    "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
+    "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\" \"libs/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
-    "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
+    "lint": "npm run lint:eslint && npm run lint:types",
+    "lint:eslint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
+    "lint:types": "tsc --noEmit",
+    "db:studio": "drizzle-kit studio",
+    "db:migration:run": "tsx -r tsconfig-paths/register drizzle-migrate.ts",
+    "db:migration:generate": "drizzle-kit generate --config drizzle.config.ts",
+    "db:seed": "tsx -r tsconfig-paths/register drizzle-seed.ts",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
@@ -79,7 +85,7 @@
       "json",
       "ts"
     ],
-    "rootDir": "src",
+    "rootDir": ".",
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
@@ -87,7 +93,14 @@
     "collectCoverageFrom": [
       "**/*.(t|j)s"
     ],
-    "coverageDirectory": "../coverage",
-    "testEnvironment": "node"
+    "coverageDirectory": "./coverage",
+    "testEnvironment": "node",
+    "roots": [
+      "<rootDir>/src/",
+      "<rootDir>/libs/"
+    ],
+    "moduleNameMapper": {
+      "^@db(|/.*)$": "<rootDir>/libs/db/src/$1"
+    }
   }
 }
