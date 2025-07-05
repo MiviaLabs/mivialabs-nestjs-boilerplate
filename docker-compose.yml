@@ -47,10 +47,30 @@ services:
     networks:
       - hirepanel-network
 
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    environment:
+      RABBITMQ_DEFAULT_USER: hirepanel
+      RABBITMQ_DEFAULT_PASS: hirepanel_password
+    ports:
+      - "5672:5672"   # AMQP port
+      - "15672:15672" # Management UI port
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+      - ./docker/rabbitmq/definitions.json:/etc/rabbitmq/definitions.json
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - hirepanel-network
+
 volumes:
   postgres_data:
   minio_data:
   redis_data:
+  rabbitmq_data:
 
 networks:
   hirepanel-network:
