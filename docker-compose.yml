@@ -2,19 +2,19 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - '6379:6379'
     restart: unless-stopped
     command: redis-server --appendonly yes #--requirepass redis_password
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      test: ['CMD', 'redis-cli', '--raw', 'incr', 'ping']
       interval: 10s
       timeout: 3s
       retries: 5
     networks:
-      - hirepanel-network
-      
+      - api-network
+
   postgres:
     image: pgvector/pgvector:pg16
     environment:
@@ -22,11 +22,11 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - "5433:5432"
+      - '5433:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
-      - hirepanel-network
+      - api-network
 
   minio:
     image: minio/minio:latest
@@ -35,36 +35,36 @@ services:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin123
     ports:
-      - "9000:9000"  # API port
-      - "9001:9001"  # Console port
+      - '9000:9000' # API port
+      - '9001:9001' # Console port
     volumes:
       - minio_data:/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      test: ['CMD', 'curl', '-f', 'http://localhost:9000/minio/health/live']
       interval: 30s
       timeout: 20s
       retries: 3
     networks:
-      - hirepanel-network
+      - api-network
 
   rabbitmq:
     image: rabbitmq:3.13-management
     environment:
-      RABBITMQ_DEFAULT_USER: hirepanel
-      RABBITMQ_DEFAULT_PASS: hirepanel_password
+      RABBITMQ_DEFAULT_USER: api
+      RABBITMQ_DEFAULT_PASS: api_password
     ports:
-      - "5672:5672"   # AMQP port
-      - "15672:15672" # Management UI port
+      - '5672:5672' # AMQP port
+      - '15672:15672' # Management UI port
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
       - ./docker/rabbitmq/definitions.json:/etc/rabbitmq/definitions.json
     healthcheck:
-      test: ["CMD", "rabbitmqctl", "status"]
+      test: ['CMD', 'rabbitmqctl', 'status']
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
-      - hirepanel-network
+      - api-network
 
 volumes:
   postgres_data:
@@ -73,5 +73,5 @@ volumes:
   rabbitmq_data:
 
 networks:
-  hirepanel-network:
+  api-network:
     driver: bridge

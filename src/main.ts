@@ -20,13 +20,6 @@ async function bootstrap() {
   if (process.env.CORS_ALLOWED_ORIGINS) {
     const corsAllowedOrigins = process.env.CORS_ALLOWED_ORIGINS.split(',');
     allowedOrigins.push(...corsAllowedOrigins);
-  } else {
-    allowedOrigins.push('https://hirepanel.app');
-  }
-
-  if (process.env.NODE_ENV !== 'production') {
-    allowedOrigins.push('http://localhost:3000');
-    allowedOrigins.push('http://127.0.0.1:3000');
   }
 
   app.enableCors({
@@ -49,10 +42,10 @@ async function bootstrap() {
   // app.useGlobalGuards(new JwtAuthGuard());
 
   const config = new DocumentBuilder()
-    .setTitle('Hirepanel API')
-    .setDescription('Official Hirepanel API')
-    .setVersion('0.1.0')
-    .addTag('hirepanel')
+    .setTitle('API')
+    .setDescription('Official API')
+    .setVersion('1.0.0')
+    .addTag('api')
     .build();
 
   const documentFactory = () => SwaggerModule.createDocument(app, config);

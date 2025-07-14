@@ -1,10 +1,8 @@
-# HirePanel API
+# API
 
 A modern, enterprise-grade hiring management system built with NestJS, designed to streamline recruitment processes for organizations of all sizes.
 
 ## Overview
-
-HirePanel API is a robust backend service that provides comprehensive hiring management capabilities, including candidate tracking, interview scheduling, and organizational management. Built with modern technologies and following enterprise best practices, it offers scalability, security, and maintainability for complex recruitment workflows.
 
 ## Features
 
@@ -22,27 +20,32 @@ HirePanel API is a robust backend service that provides comprehensive hiring man
 ## Technology Stack
 
 ### Core Framework
+
 - **NestJS**: Enterprise-grade Node.js framework
 - **TypeScript**: Type-safe JavaScript development
 - **Express**: Web application framework
 
 ### Database & ORM
+
 - **PostgreSQL**: Primary database with pgvector extension
 - **Drizzle ORM**: Type-safe database toolkit
 - **Drizzle Kit**: Database migration and management
 
 ### Message Brokers & Queues
+
 - **RabbitMQ**: Message broker for inter-service communication
 - **BullMQ**: Redis-based queue for background jobs
 - **Redis**: In-memory data store for caching and sessions
 
 ### Security & Validation
+
 - **Argon2**: Password hashing
 - **Class Validator**: DTO validation
 - **Zod**: Schema validation
 - **AJV**: JSON schema validation
 
 ### Development Tools
+
 - **ESLint**: Code linting
 - **Prettier**: Code formatting
 - **Jest**: Testing framework
@@ -51,7 +54,7 @@ HirePanel API is a robust backend service that provides comprehensive hiring man
 ## Project Structure
 
 ```
-hirepanel-api/
+api/
 ├── src/                          # Application source code
 │   ├── app.module.ts            # Main application module
 │   ├── app.controller.ts        # Main application controller
@@ -86,7 +89,7 @@ hirepanel-api/
 ```bash
 # Clone the repository
 git clone <repository-url>
-cd hirepanel-api
+cd api
 
 # Install dependencies
 npm install
@@ -120,34 +123,40 @@ The API will be available at `http://localhost:3000`
 ## Available Scripts
 
 ### Development
+
 - `npm run start:dev` - Start in development mode with hot reload
 - `npm run start:debug` - Start in debug mode
 - `npm run start:prod` - Start in production mode
 
 ### Database Operations
+
 - `npm run db:studio` - Open Drizzle Studio for database management
 - `npm run db:migration:generate` - Generate new migration
 - `npm run db:migration:run` - Run pending migrations
 - `npm run db:seed` - Seed database with initial data
 
 ### Code Quality
+
 - `npm run lint` - Run ESLint and TypeScript checks
 - `npm run lint:eslint` - Run ESLint only
 - `npm run lint:types` - Run TypeScript type checking
 - `npm run format` - Format code with Prettier
 
 ### Testing
+
 - `npm run test` - Run unit tests
 - `npm run test:watch` - Run tests in watch mode
 - `npm run test:cov` - Run tests with coverage report
 - `npm run test:e2e` - Run end-to-end tests
 
 ### Build
+
 - `npm run build` - Build the application for production
 
 ## Services
 
 ### Core Services
+
 - **API Server**: Main NestJS application (Port 3000)
 - **PostgreSQL**: Database server (Port 5433)
 - **Redis**: Cache and session store (Port 6379)
@@ -155,6 +164,7 @@ The API will be available at `http://localhost:3000`
 - **MinIO**: Object storage (Port 9000, Console: 9001)
 
 ### Service URLs
+
 - API Documentation: `http://localhost:3000/api/docs`
 - RabbitMQ Management: `http://localhost:15672`
 - MinIO Console: `http://localhost:9001`

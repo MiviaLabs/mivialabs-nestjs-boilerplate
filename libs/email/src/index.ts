@@ -39,7 +39,7 @@
  * ```
  *
  * @version 1.0.0
- * @author HirePanel Development Team
+ * @author MiviaLabs Development Team
  */
 
 // Main module exports

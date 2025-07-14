@@ -94,7 +94,7 @@ EmailModule.forRoot({
       maxEmailsPerHour: 1000,
     },
   },
-})
+});
 ```
 
 ### AWS SES Configuration
@@ -110,7 +110,7 @@ EmailModule.forRoot({
     maxAttempts: 3,
     requestTimeout: 30000,
   },
-})
+});
 ```
 
 ### Async Configuration
@@ -124,9 +124,10 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
     EmailModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
-        provider: configService.get('EMAIL_PROVIDER') === 'resend' 
-          ? EmailProvider.RESEND 
-          : EmailProvider.AWS_SES,
+        provider:
+          configService.get('EMAIL_PROVIDER') === 'resend'
+            ? EmailProvider.RESEND
+            : EmailProvider.AWS_SES,
         config: {
           apiKey: configService.get('RESEND_API_KEY'),
           // or AWS SES config based on provider
@@ -226,7 +227,7 @@ export class HealthService {
 
   async checkEmailHealth() {
     const health = await this.emailService.getHealthStatus();
-    
+
     return {
       email: {
         healthy: health.healthy,
@@ -288,7 +289,7 @@ const result = await emailService.sendEmail(emailOptions);
 
 if (!result.success) {
   const error = result.error!;
-  
+
   console.error('Email failed:', {
     code: error.code,
     message: error.message,
@@ -296,7 +297,7 @@ if (!result.success) {
     provider: result.provider,
     timestamp: result.timestamp,
   });
-  
+
   if (error.retryable) {
     // Implement retry logic
     console.log('Error is retryable, scheduling retry...');
@@ -335,7 +336,7 @@ export class EmailConfigService {
 
   createEmailConfig(): EmailModuleConfig {
     const provider = this.configService.get('EMAIL_PROVIDER');
-    
+
     if (provider === 'resend') {
       return {
         provider: EmailProvider.RESEND,
@@ -408,7 +409,7 @@ describe('EmailService', () => {
 ### Configuration Interfaces
 
 - `EmailModuleConfig` - Main module configuration
-- `AwsSesConfig` - AWS SES specific configuration  
+- `AwsSesConfig` - AWS SES specific configuration
 - `ResendConfig` - Resend specific configuration
 - `GlobalEmailSettings` - Global email settings
 
@@ -436,5 +437,3 @@ This project is licensed under the MIT License.
 - [NestJS Documentation](https://docs.nestjs.com/)
 
 ---
-
-**Built with ❤️ for the HirePanel API**

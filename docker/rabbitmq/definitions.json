@@ -1,27 +1,27 @@
 {
-    "rabbit_version": "3.13.0",
-    "users": [
-        {
-            "name": "hirepanel",
-            "password": "hirepanel_password",
-            "tags": "administrator"
-        }
-    ],
-    "vhosts": [
-        {
-            "name": "/"
-        }
-    ],
-    "permissions": [
-        {
-            "user": "hirepanel",
-            "vhost": "/",
-            "configure": ".*",
-            "write": ".*",
-            "read": ".*"
-        }
-    ],
-    "exchanges": [],
-    "queues": [],
-    "bindings": []
+  "rabbit_version": "3.13.0",
+  "users": [
+    {
+      "name": "api",
+      "password": "api_password",
+      "tags": "administrator"
+    }
+  ],
+  "vhosts": [
+    {
+      "name": "/"
+    }
+  ],
+  "permissions": [
+    {
+      "user": "api",
+      "vhost": "/",
+      "configure": ".*",
+      "write": ".*",
+      "read": ".*"
+    }
+  ],
+  "exchanges": [],
+  "queues": [],
+  "bindings": []
 }
