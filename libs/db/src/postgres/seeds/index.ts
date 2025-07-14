@@ -1,26 +1,14 @@
-// import { PostgresDb } from '../types';
+import { PostgresDb } from '../types/postgres-db.type';
 
-// Prompt seeds
-// import { seedPromptCategories } from './prompts-categories';
+// Organization seeds
+import { seedOrganizations } from './organizations';
 
-// // Agent seeds
-// import { seedProcessUrlAgent } from './agents/process-url';
-
-// // Tool seeds
-// import { seedDocumentProcessingTools } from './tools/document-processing-tools';
-
-export function seedDatabase(): void {
+export async function seedDatabase(db: PostgresDb): Promise<void> {
   console.log('🌱 Starting database seeding...');
 
   try {
-    // Seed prompt categories first (prompts may reference categories)
-    // await seedPromptCategories(db);
-
-    // // Seed tools (agents may reference tools)
-    // await seedDocumentProcessingTools(db);
-
-    // // Seed agents
-    // await seedProcessUrlAgent(db);
+    // Seed organizations first (other entities may reference organizations)
+    await seedOrganizations(db);
 
     console.log('🎉 Database seeding completed successfully!');
   } catch (error) {
@@ -30,4 +18,4 @@ export function seedDatabase(): void {
 }
 
 // Export individual seed functions for selective seeding
-// export { seedPromptCategories, seedProcessUrlAgent, seedDocumentProcessingTools };
+export { seedOrganizations };

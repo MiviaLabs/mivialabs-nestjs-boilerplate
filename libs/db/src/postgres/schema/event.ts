@@ -95,4 +95,4 @@ export const event = pgTable(
 ).enableRLS();
 
 export type Event = typeof event.$inferSelect;
-export type NewEvent = typeof event.$inferInsert;
+export type EventInsert = typeof event.$inferInsert;
