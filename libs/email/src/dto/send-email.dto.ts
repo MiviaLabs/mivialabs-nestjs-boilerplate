@@ -1,4 +1,10 @@
-import { IsEmail, IsString, IsOptional, IsArray, ValidateNested } from 'class-validator';
+import {
+  IsEmail,
+  IsString,
+  IsOptional,
+  IsArray,
+  ValidateNested,
+} from 'class-validator';
 import { Type, Transform } from 'class-transformer';
 import { EmailAttachmentDto } from './email-attachment.dto';
 
@@ -10,7 +16,10 @@ export class SendEmailDto {
   @IsEmail({}, { message: 'From address must be a valid email' })
   from!: string;
 
-  @IsEmail({}, { each: true, message: 'All recipient addresses must be valid emails' })
+  @IsEmail(
+    {},
+    { each: true, message: 'All recipient addresses must be valid emails' },
+  )
   @Transform(({ value }: { value: unknown }) =>
     Array.isArray(value) ? (value as string[]) : [value as string],
   )
@@ -39,7 +48,10 @@ export class SendEmailDto {
   cc?: string[];
 
   @IsOptional()
-  @IsEmail({}, { each: true, message: 'All BCC addresses must be valid emails' })
+  @IsEmail(
+    {},
+    { each: true, message: 'All BCC addresses must be valid emails' },
+  )
   @Transform(({ value }: { value: unknown }) =>
     Array.isArray(value) ? (value as string[]) : [value as string],
   )

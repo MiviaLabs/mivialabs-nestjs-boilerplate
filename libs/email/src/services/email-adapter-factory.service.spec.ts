@@ -137,8 +137,14 @@ describe('EmailAdapterFactory', () => {
         apiKey: 're_test-key',
       };
 
-      const awsAdapter = service.createAdapter(EmailProvider.AWS_SES, awsConfig);
-      const resendAdapter = service.createAdapter(EmailProvider.RESEND, resendConfig);
+      const awsAdapter = service.createAdapter(
+        EmailProvider.AWS_SES,
+        awsConfig,
+      );
+      const resendAdapter = service.createAdapter(
+        EmailProvider.RESEND,
+        resendConfig,
+      );
 
       expect(awsAdapter).toBeInstanceOf(AwsSesAdapter);
       expect(resendAdapter).toBeInstanceOf(ResendAdapter);

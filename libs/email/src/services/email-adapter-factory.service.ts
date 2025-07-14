@@ -22,7 +22,10 @@ export class EmailAdapterFactory {
    * @param config Provider-specific configuration
    * @returns Configured email adapter instance
    */
-  createAdapter(provider: EmailProvider, config: EmailProviderConfigUnion): EmailAdapter {
+  createAdapter(
+    provider: EmailProvider,
+    config: EmailProviderConfigUnion,
+  ): EmailAdapter {
     const cacheKey = this.getCacheKey(provider, config);
 
     // Return cached adapter if available
@@ -66,7 +69,9 @@ export class EmailAdapterFactory {
       provider: EmailProvider;
       config: EmailProviderConfigUnion;
     }>,
-  ): Promise<Array<{ provider: EmailProvider; valid: boolean; error?: string }>> {
+  ): Promise<
+    Array<{ provider: EmailProvider; valid: boolean; error?: string }>
+  > {
     const results = [];
 
     for (const { provider, config } of providers) {
@@ -98,7 +103,10 @@ export class EmailAdapterFactory {
     this.logger.debug('Adapter cache cleared');
   }
 
-  private getCacheKey(provider: EmailProvider, config: EmailProviderConfigUnion): string {
+  private getCacheKey(
+    provider: EmailProvider,
+    config: EmailProviderConfigUnion,
+  ): string {
     // Create a cache key based on provider and essential config properties
     const configHash = this.hashConfig(config);
     return `${provider}:${configHash}`;
@@ -123,11 +131,15 @@ export class EmailAdapterFactory {
 
     // If access keys are provided, both must be present
     if (config.accessKeyId && !config.secretAccessKey) {
-      throw new Error('AWS SES secret access key is required when access key ID is provided');
+      throw new Error(
+        'AWS SES secret access key is required when access key ID is provided',
+      );
     }
 
     if (config.secretAccessKey && !config.accessKeyId) {
-      throw new Error('AWS SES access key ID is required when secret access key is provided');
+      throw new Error(
+        'AWS SES access key ID is required when secret access key is provided',
+      );
     }
 
     // Validate region format

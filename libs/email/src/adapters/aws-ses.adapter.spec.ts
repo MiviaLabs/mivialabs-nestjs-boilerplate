@@ -259,7 +259,9 @@ describe('AwsSesAdapter', () => {
       const result = await adapter.validateConfiguration();
 
       expect(result).toBe(true);
-      expect(mockSend).toHaveBeenCalledWith(expect.any(GetAccountSendingEnabledCommand));
+      expect(mockSend).toHaveBeenCalledWith(
+        expect.any(GetAccountSendingEnabledCommand),
+      );
     });
 
     it('should return false when configuration is invalid', async () => {

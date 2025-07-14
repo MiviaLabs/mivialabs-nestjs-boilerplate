@@ -23,25 +23,38 @@ export const rlsTx = <T>(
   db: PostgresDb,
   context: RLSContext | string, // Support legacy string usage
   cb: (
-    tx: PgTransaction<PostgresJsQueryResultHKT, typeof schema, ExtractTablesWithRelations<typeof schema>>,
+    tx: PgTransaction<
+      PostgresJsQueryResultHKT,
+      typeof schema,
+      ExtractTablesWithRelations<typeof schema>
+    >,
   ) => T | Promise<T>,
 ): Promise<T> => {
   // Handle legacy string parameter
-  const rlsContext: RLSContext = typeof context === 'string' ? { organizationId: context } : context;
+  const rlsContext: RLSContext =
+    typeof context === 'string' ? { organizationId: context } : context;
 
   return db.transaction(async (tx) => {
     try {
       // Set organization context for RLS policies
-      await tx.execute(sql.raw(`SET app.current_organization_id = '${rlsContext.organizationId}'`));
+      await tx.execute(
+        sql.raw(
+          `SET app.current_organization_id = '${rlsContext.organizationId}'`,
+        ),
+      );
 
       // Set user context if provided (useful for audit trails)
       if (rlsContext.userId) {
-        await tx.execute(sql.raw(`SET app.current_user_id = '${rlsContext.userId}'`));
+        await tx.execute(
+          sql.raw(`SET app.current_user_id = '${rlsContext.userId}'`),
+        );
       }
 
       // Set session context if provided
       if (rlsContext.sessionId) {
-        await tx.execute(sql.raw(`SET app.current_session_id = '${rlsContext.sessionId}'`));
+        await tx.execute(
+          sql.raw(`SET app.current_session_id = '${rlsContext.sessionId}'`),
+        );
       }
 
       logger.debug(
@@ -50,7 +63,10 @@ export const rlsTx = <T>(
 
       return await cb(tx);
     } catch (error) {
-      logger.error(`RLS transaction failed for org ${rlsContext.organizationId}:`, error);
+      logger.error(
+        `RLS transaction failed for org ${rlsContext.organizationId}:`,
+        error,
+      );
       throw error;
     }
   });
@@ -63,7 +79,11 @@ export const rlsTx = <T>(
 export const systemAdminTx = <T>(
   db: PostgresDb,
   cb: (
-    tx: PgTransaction<PostgresJsQueryResultHKT, typeof schema, ExtractTablesWithRelations<typeof schema>>,
+    tx: PgTransaction<
+      PostgresJsQueryResultHKT,
+      typeof schema,
+      ExtractTablesWithRelations<typeof schema>
+    >,
   ) => T | Promise<T>,
 ): Promise<T> => {
   return db.transaction(async (tx) => {
@@ -102,7 +122,11 @@ export const systemAdminTx = <T>(
 export const publicTx = <T>(
   db: PostgresDb,
   cb: (
-    tx: PgTransaction<PostgresJsQueryResultHKT, typeof schema, ExtractTablesWithRelations<typeof schema>>,
+    tx: PgTransaction<
+      PostgresJsQueryResultHKT,
+      typeof schema,
+      ExtractTablesWithRelations<typeof schema>
+    >,
   ) => T | Promise<T>,
 ): Promise<T> => {
   return db.transaction(async (tx) => {
@@ -127,16 +151,24 @@ export const publicTx = <T>(
  */
 export const getCurrentRLSContext = async (
   db: PostgresDb,
-): Promise<{ organizationId?: string; userId?: string; sessionId?: string }> => {
+): Promise<{
+  organizationId?: string;
+  userId?: string;
+  sessionId?: string;
+}> => {
   try {
     const [orgResult] = (await db.execute(
-      sql.raw(`SELECT current_setting('app.current_organization_id', true) as org_id`),
+      sql.raw(
+        `SELECT current_setting('app.current_organization_id', true) as org_id`,
+      ),
     )) as Array<{ org_id: string }>;
     const [userResult] = (await db.execute(
       sql.raw(`SELECT current_setting('app.current_user_id', true) as user_id`),
     )) as Array<{ user_id: string }>;
     const [sessionResult] = (await db.execute(
-      sql.raw(`SELECT current_setting('app.current_session_id', true) as session_id`),
+      sql.raw(
+        `SELECT current_setting('app.current_session_id', true) as session_id`,
+      ),
     )) as Array<{ session_id: string }>;
 
     return {

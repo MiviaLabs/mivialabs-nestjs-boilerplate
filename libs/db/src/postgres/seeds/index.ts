@@ -1,4 +1,4 @@
-import { PostgresDb } from '../types';
+// import { PostgresDb } from '../types';
 
 // Prompt seeds
 // import { seedPromptCategories } from './prompts-categories';
@@ -9,7 +9,7 @@ import { PostgresDb } from '../types';
 // // Tool seeds
 // import { seedDocumentProcessingTools } from './tools/document-processing-tools';
 
-export async function seedDatabase(db: PostgresDb) {
+export function seedDatabase(): void {
   console.log('🌱 Starting database seeding...');
 
   try {

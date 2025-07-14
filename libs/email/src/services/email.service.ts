@@ -21,9 +21,14 @@ export class EmailService {
     private readonly adapterFactory: EmailAdapterFactory,
   ) {
     // Create the email adapter based on configuration
-    this.emailAdapter = this.adapterFactory.createAdapter(this.config.provider, this.config.config);
+    this.emailAdapter = this.adapterFactory.createAdapter(
+      this.config.provider,
+      this.config.config,
+    );
 
-    this.logger.log(`Email service initialized with provider: ${this.config.provider}`);
+    this.logger.log(
+      `Email service initialized with provider: ${this.config.provider}`,
+    );
   }
 
   /**
@@ -103,7 +108,9 @@ export class EmailService {
    * @param emailOptions Array of email options
    * @returns Promise that resolves to array of send results
    */
-  async sendBatchEmails(emailOptions: EmailSendOptions[]): Promise<EmailSendResult[]> {
+  async sendBatchEmails(
+    emailOptions: EmailSendOptions[],
+  ): Promise<EmailSendResult[]> {
     this.logger.debug(`Sending batch of ${emailOptions.length} emails`);
 
     const results = await Promise.allSettled(
@@ -117,7 +124,10 @@ export class EmailService {
             success: false,
             error: {
               code: 'BATCH_EMAIL_ERROR',
-              message: result.reason instanceof Error ? result.reason.message : 'Unknown error',
+              message:
+                result.reason instanceof Error
+                  ? result.reason.message
+                  : 'Unknown error',
               details: { originalError: result.reason },
               retryable: false,
             },

@@ -67,7 +67,10 @@ describe('EmailService', () => {
 
     it('should create adapter using factory', () => {
       const createAdapterSpy = jest.spyOn(adapterFactory, 'createAdapter');
-      expect(createAdapterSpy).toHaveBeenCalledWith(mockConfig.provider, mockConfig.config);
+      expect(createAdapterSpy).toHaveBeenCalledWith(
+        mockConfig.provider,
+        mockConfig.config,
+      );
     });
   });
 
@@ -105,7 +108,9 @@ describe('EmailService', () => {
 
     it('should apply global settings when no from address provided', async () => {
       const optionsWithoutFrom: Partial<EmailSendOptions> = { ...emailOptions };
-      delete (optionsWithoutFrom as Partial<EmailSendOptions> & { from?: unknown }).from;
+      delete (
+        optionsWithoutFrom as Partial<EmailSendOptions> & { from?: unknown }
+      ).from;
 
       const expectedResult: EmailSendResult = {
         success: true,
@@ -185,9 +190,12 @@ describe('EmailService', () => {
       const testService = testModule.get<EmailService>(EmailService);
 
       const invalidOptions: Partial<EmailSendOptions> = { ...emailOptions };
-      delete (invalidOptions as Partial<EmailSendOptions> & { from?: unknown }).from;
+      delete (invalidOptions as Partial<EmailSendOptions> & { from?: unknown })
+        .from;
 
-      const result = await testService.sendEmail(invalidOptions as EmailSendOptions);
+      const result = await testService.sendEmail(
+        invalidOptions as EmailSendOptions,
+      );
 
       expect(result.success).toBe(false);
       expect(result.error?.message).toContain('From address is required');
@@ -197,12 +205,17 @@ describe('EmailService', () => {
 
     it('should validate required fields - missing to', async () => {
       const invalidOptions: Partial<EmailSendOptions> = { ...emailOptions };
-      delete (invalidOptions as Partial<EmailSendOptions> & { to?: unknown }).to;
+      delete (invalidOptions as Partial<EmailSendOptions> & { to?: unknown })
+        .to;
 
-      const result = await service.sendEmail(invalidOptions as EmailSendOptions);
+      const result = await service.sendEmail(
+        invalidOptions as EmailSendOptions,
+      );
 
       expect(result.success).toBe(false);
-      expect(result.error?.message).toContain('At least one recipient is required');
+      expect(result.error?.message).toContain(
+        'At least one recipient is required',
+      );
     });
 
     it('should require at least one recipient', async () => {
@@ -211,14 +224,20 @@ describe('EmailService', () => {
       const result = await service.sendEmail(invalidOptions);
 
       expect(result.success).toBe(false);
-      expect(result.error?.message).toContain('At least one recipient is required');
+      expect(result.error?.message).toContain(
+        'At least one recipient is required',
+      );
     });
 
     it('should require subject', async () => {
       const invalidOptions: Partial<EmailSendOptions> = { ...emailOptions };
-      delete (invalidOptions as Partial<EmailSendOptions> & { subject?: unknown }).subject;
+      delete (
+        invalidOptions as Partial<EmailSendOptions> & { subject?: unknown }
+      ).subject;
 
-      const result = await service.sendEmail(invalidOptions as EmailSendOptions);
+      const result = await service.sendEmail(
+        invalidOptions as EmailSendOptions,
+      );
 
       expect(result.success).toBe(false);
       expect(result.error?.message).toContain('Subject is required');
@@ -226,12 +245,17 @@ describe('EmailService', () => {
 
     it('should require either HTML or text content', async () => {
       const invalidOptions: Partial<EmailSendOptions> = { ...emailOptions };
-      delete (invalidOptions as Partial<EmailSendOptions> & { html?: unknown }).html;
+      delete (invalidOptions as Partial<EmailSendOptions> & { html?: unknown })
+        .html;
 
-      const result = await service.sendEmail(invalidOptions as EmailSendOptions);
+      const result = await service.sendEmail(
+        invalidOptions as EmailSendOptions,
+      );
 
       expect(result.success).toBe(false);
-      expect(result.error?.message).toContain('Either HTML or text content is required');
+      expect(result.error?.message).toContain(
+        'Either HTML or text content is required',
+      );
     });
   });
 
@@ -317,7 +341,10 @@ describe('EmailService', () => {
         .mockResolvedValueOnce(expectedResults[0]!)
         .mockResolvedValueOnce(expectedResults[1]!);
 
-      const results = await service.sendBatchEmails([emailOptions1, emailOptions2]);
+      const results = await service.sendBatchEmails([
+        emailOptions1,
+        emailOptions2,
+      ]);
 
       expect(results).toHaveLength(2);
       const sendEmailSpy = jest.spyOn(mockAdapter, 'sendEmail');
@@ -346,9 +373,14 @@ describe('EmailService', () => {
         provider: EmailProvider.RESEND,
       };
 
-      mockAdapter.sendEmail.mockResolvedValueOnce(successResult).mockResolvedValueOnce(errorResult);
+      mockAdapter.sendEmail
+        .mockResolvedValueOnce(successResult)
+        .mockResolvedValueOnce(errorResult);
 
-      const results = await service.sendBatchEmails([emailOptions1, emailOptions2]);
+      const results = await service.sendBatchEmails([
+        emailOptions1,
+        emailOptions2,
+      ]);
 
       expect(results).toHaveLength(2);
       expect(results[0]!.success).toBe(true);
@@ -367,7 +399,10 @@ describe('EmailService', () => {
         .mockResolvedValueOnce(successResult)
         .mockRejectedValueOnce(new Error('Network error'));
 
-      const results = await service.sendBatchEmails([emailOptions1, emailOptions2]);
+      const results = await service.sendBatchEmails([
+        emailOptions1,
+        emailOptions2,
+      ]);
 
       expect(results).toHaveLength(2);
       expect(results[0]!.success).toBe(true);
@@ -408,7 +443,10 @@ describe('EmailService', () => {
 
   describe('validateConfiguration', () => {
     it('should return validation result from adapter', async () => {
-      const validateConfigurationSpy = jest.spyOn(mockAdapter, 'validateConfiguration');
+      const validateConfigurationSpy = jest.spyOn(
+        mockAdapter,
+        'validateConfiguration',
+      );
       mockAdapter.validateConfiguration.mockResolvedValue(true);
 
       const result = await service.validateConfiguration();

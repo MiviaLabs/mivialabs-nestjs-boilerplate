@@ -45,7 +45,7 @@ async function seed() {
         // await seedUsers(db as unknown as PostgresDb);
 
         // Seed tools and agents
-        await seedDatabase(db as unknown as PostgresDb);
+        seedDatabase();
 
         console.log('✅ All seeds completed successfully!');
     } catch (error) {

@@ -23,4 +23,5 @@ export type EmailProviderConfigMap = {
 /**
  * Helper type to get configuration type for a specific provider
  */
-export type ConfigForProvider<T extends EmailProvider> = EmailProviderConfigMap[T];
+export type ConfigForProvider<T extends EmailProvider> =
+  EmailProviderConfigMap[T];

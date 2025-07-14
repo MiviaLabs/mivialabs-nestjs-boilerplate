@@ -27,13 +27,16 @@ describe('EmailModule Integration', () => {
       }).compile();
 
       const emailService = module.get<EmailService>(EmailService);
-      const adapterFactory = module.get<EmailAdapterFactory>(EmailAdapterFactory);
+      const adapterFactory =
+        module.get<EmailAdapterFactory>(EmailAdapterFactory);
       const moduleConfig = module.get<EmailModuleConfig>(EMAIL_MODULE_CONFIG);
 
       expect(emailService).toBeDefined();
       expect(adapterFactory).toBeDefined();
       expect(moduleConfig.provider).toBe(EmailProvider.RESEND);
-      expect((moduleConfig.config as ResendConfig).apiKey).toBe('re_test-resend-key');
+      expect((moduleConfig.config as ResendConfig).apiKey).toBe(
+        're_test-resend-key',
+      );
     });
 
     it('should create module with AWS SES configuration', async () => {
@@ -51,7 +54,8 @@ describe('EmailModule Integration', () => {
       }).compile();
 
       const emailService = module.get<EmailService>(EmailService);
-      const adapterFactory = module.get<EmailAdapterFactory>(EmailAdapterFactory);
+      const adapterFactory =
+        module.get<EmailAdapterFactory>(EmailAdapterFactory);
       const moduleConfig = module.get<EmailModuleConfig>(EMAIL_MODULE_CONFIG);
 
       expect(emailService).toBeDefined();
@@ -79,8 +83,12 @@ describe('EmailModule Integration', () => {
 
       const moduleConfig = module.get<EmailModuleConfig>(EMAIL_MODULE_CONFIG);
 
-      expect(moduleConfig.globalSettings?.defaultFromAddress).toBe('noreply@example.com');
-      expect(moduleConfig.globalSettings?.defaultReplyTo).toBe('support@example.com');
+      expect(moduleConfig.globalSettings?.defaultFromAddress).toBe(
+        'noreply@example.com',
+      );
+      expect(moduleConfig.globalSettings?.defaultReplyTo).toBe(
+        'support@example.com',
+      );
       expect(moduleConfig.globalSettings?.enableTracking).toBe(true);
     });
   });
@@ -100,7 +108,8 @@ describe('EmailModule Integration', () => {
       }).compile();
 
       const emailService = module.get<EmailService>(EmailService);
-      const adapterFactory = module.get<EmailAdapterFactory>(EmailAdapterFactory);
+      const adapterFactory =
+        module.get<EmailAdapterFactory>(EmailAdapterFactory);
 
       expect(emailService).toBeDefined();
       expect(adapterFactory).toBeDefined();
@@ -145,7 +154,9 @@ describe('EmailModule Integration', () => {
 
       expect(emailService).toBeDefined();
       expect(moduleConfig.provider).toBe(EmailProvider.RESEND);
-      expect((moduleConfig.config as ResendConfig).apiKey).toBe('re_async-test-key');
+      expect((moduleConfig.config as ResendConfig).apiKey).toBe(
+        're_async-test-key',
+      );
     });
 
     it('should create module with async configuration using useClass', async () => {
@@ -197,7 +208,9 @@ describe('EmailModule Integration', () => {
 
       expect(emailService).toBeDefined();
       expect(moduleConfig.provider).toBe(EmailProvider.RESEND);
-      expect((moduleConfig.config as ResendConfig).apiKey).toBe('re_feature-async-key');
+      expect((moduleConfig.config as ResendConfig).apiKey).toBe(
+        're_feature-async-key',
+      );
     });
   });
 
@@ -237,7 +250,8 @@ describe('EmailModule Integration', () => {
 
     it('should be able to get health status', async () => {
       // Mock the adapter's health status
-      const adapterFactory = module.get<EmailAdapterFactory>(EmailAdapterFactory);
+      const adapterFactory =
+        module.get<EmailAdapterFactory>(EmailAdapterFactory);
       const adapter = adapterFactory.createAdapter(
         EmailProvider.RESEND,
         config.config as ResendConfig,
@@ -257,7 +271,8 @@ describe('EmailModule Integration', () => {
 
     it('should be able to validate configuration', async () => {
       // Mock the adapter's configuration validation
-      const adapterFactory = module.get<EmailAdapterFactory>(EmailAdapterFactory);
+      const adapterFactory =
+        module.get<EmailAdapterFactory>(EmailAdapterFactory);
       const adapter = adapterFactory.createAdapter(
         EmailProvider.RESEND,
         config.config as ResendConfig,

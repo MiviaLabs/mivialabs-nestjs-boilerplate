@@ -31,8 +31,16 @@ export class ResendAdapter implements EmailAdapter {
         text: options.text || ' ', // Provide default text if not provided
         html: options.html,
         reply_to: options.replyTo || this.config.defaultReplyTo,
-        cc: options.cc ? (Array.isArray(options.cc) ? options.cc : [options.cc]) : undefined,
-        bcc: options.bcc ? (Array.isArray(options.bcc) ? options.bcc : [options.bcc]) : undefined,
+        cc: options.cc
+          ? Array.isArray(options.cc)
+            ? options.cc
+            : [options.cc]
+          : undefined,
+        bcc: options.bcc
+          ? Array.isArray(options.bcc)
+            ? options.bcc
+            : [options.bcc]
+          : undefined,
         attachments: options.attachments?.map((attachment) => ({
           filename: attachment.filename,
           content: attachment.content,
@@ -56,7 +64,9 @@ export class ResendAdapter implements EmailAdapter {
         throw new Error(`Resend API error: ${response.error.message}`);
       }
 
-      this.logger.debug(`Email sent successfully via Resend: ${response.data?.id}`);
+      this.logger.debug(
+        `Email sent successfully via Resend: ${response.data?.id}`,
+      );
 
       return {
         success: true,
@@ -75,7 +85,8 @@ export class ResendAdapter implements EmailAdapter {
             error instanceof Error && 'code' in error
               ? (error as Error & { code: string }).code
               : 'RESEND_ERROR',
-          message: error instanceof Error ? error.message : 'Failed to send email',
+          message:
+            error instanceof Error ? error.message : 'Failed to send email',
           details: { originalError: error },
           retryable: this.isRetryableError(error),
         },
@@ -153,7 +164,10 @@ export class ResendAdapter implements EmailAdapter {
     const retryableStatusCodes = [429, 500, 502, 503, 504];
     if (typeof error === 'object' && error !== null) {
       const errorObj = error as { status?: number; code?: string };
-      return retryableStatusCodes.includes(errorObj.status || 0) || errorObj.code === 'ECONNRESET';
+      return (
+        retryableStatusCodes.includes(errorObj.status || 0) ||
+        errorObj.code === 'ECONNRESET'
+      );
     }
 
     return false;

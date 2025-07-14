@@ -341,7 +341,9 @@ describe('ResendAdapter', () => {
         validateEmailAddresses: false,
       };
 
-      const adapterWithoutValidation = new ResendAdapter(configWithoutValidation);
+      const adapterWithoutValidation = new ResendAdapter(
+        configWithoutValidation,
+      );
       const optionsWithInvalidEmail: EmailSendOptions = {
         from: 'invalid-email',
         to: 'recipient@example.com',
@@ -355,7 +357,9 @@ describe('ResendAdapter', () => {
       };
       mockSend.mockResolvedValue(mockResponse);
 
-      const result = await adapterWithoutValidation.sendEmail(optionsWithInvalidEmail);
+      const result = await adapterWithoutValidation.sendEmail(
+        optionsWithInvalidEmail,
+      );
 
       expect(result.success).toBe(true); // Should succeed when validation is disabled
     });

@@ -67,7 +67,9 @@ export class EmailModule {
    * @returns Dynamic module with async configuration
    */
   static forRootAsync(options: {
-    useFactory: (...args: unknown[]) => Promise<EmailModuleConfig> | EmailModuleConfig;
+    useFactory: (
+      ...args: unknown[]
+    ) => Promise<EmailModuleConfig> | EmailModuleConfig;
     inject?: (InjectionToken | OptionalFactoryDependency)[];
     imports?: (
       | DynamicModule
@@ -99,7 +101,9 @@ export class EmailModule {
    * @returns Dynamic module with async configuration
    */
   static forFeatureAsync(options: {
-    useFactory: (...args: unknown[]) => Promise<EmailModuleConfig> | EmailModuleConfig;
+    useFactory: (
+      ...args: unknown[]
+    ) => Promise<EmailModuleConfig> | EmailModuleConfig;
     inject?: (InjectionToken | OptionalFactoryDependency)[];
     imports?: (
       | DynamicModule

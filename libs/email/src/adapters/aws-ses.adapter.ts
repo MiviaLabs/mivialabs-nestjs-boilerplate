@@ -90,7 +90,9 @@ export class AwsSesAdapter implements EmailAdapter {
       const command = new SendEmailCommand(sesInput);
       const response = await this.sesClient.send(command);
 
-      this.logger.debug(`Email sent successfully via AWS SES: ${response.MessageId}`);
+      this.logger.debug(
+        `Email sent successfully via AWS SES: ${response.MessageId}`,
+      );
 
       return {
         success: true,
@@ -106,7 +108,8 @@ export class AwsSesAdapter implements EmailAdapter {
         success: false,
         error: {
           code: error instanceof Error ? error.name : 'UNKNOWN_ERROR',
-          message: error instanceof Error ? error.message : 'Failed to send email',
+          message:
+            error instanceof Error ? error.message : 'Failed to send email',
           details: { originalError: error },
           retryable: this.isRetryableError(error),
         },
@@ -134,7 +137,9 @@ export class AwsSesAdapter implements EmailAdapter {
     details?: Record<string, unknown>;
   }> {
     try {
-      const sendingQuota = await this.sesClient.send(new GetSendQuotaCommand({}));
+      const sendingQuota = await this.sesClient.send(
+        new GetSendQuotaCommand({}),
+      );
 
       return {
         healthy: true,
