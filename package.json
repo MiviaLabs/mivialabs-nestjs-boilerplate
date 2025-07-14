@@ -103,6 +103,7 @@
     ],
     "moduleNameMapper": {
       "^@db(|/.*)$": "<rootDir>/libs/db/src/$1",
+      "^@email(|/.*)$": "<rootDir>/libs/email/src/$1",
       "^@events(|/.*)$": "<rootDir>/libs/events/src/$1"
     }
   }

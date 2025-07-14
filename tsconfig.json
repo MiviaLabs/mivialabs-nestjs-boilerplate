@@ -14,12 +14,18 @@
     "skipLibCheck": true,
     "strictNullChecks": true,
     "forceConsistentCasingInFileNames": true,
-    "noImplicitAny": false,
-    "strictBindCallApply": false,
-    "noFallthroughCasesInSwitch": false,
+    "noImplicitAny": true,
+    "strictBindCallApply": true,
+    "noFallthroughCasesInSwitch": true,
+    "strict": true,
+    "noImplicitReturns": true,
+    "noImplicitThis": true,
+    "noUncheckedIndexedAccess": true,
     "paths": {
       "@db": ["libs/db/src"],
       "@db/*": ["libs/db/src/*"],
+      "@email": ["libs/email/src"],
+      "@email/*": ["libs/email/src/*"],
       "@events": ["libs/events/src"],
       "@events/*": ["libs/events/src/*"]
     }

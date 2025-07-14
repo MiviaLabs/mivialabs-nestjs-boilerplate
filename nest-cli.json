@@ -16,6 +16,15 @@
         "tsConfigPath": "libs/db/tsconfig.lib.json"
       }
     },
+    "email": {
+      "type": "library",
+      "root": "libs/email",
+      "entryFile": "index",
+      "sourceRoot": "libs/email/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/email/tsconfig.lib.json"
+      }
+    },
     "events": {
       "type": "library",
       "root": "libs/events",
