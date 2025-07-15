@@ -15,6 +15,13 @@
       "when": 1752544850019,
       "tag": "0001_funny_owl",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1752545029001,
+      "tag": "0002_mean_echo",
+      "breakpoints": true
     }
   ]
 }
