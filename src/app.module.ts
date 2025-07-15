@@ -3,9 +3,8 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { DrizzlePostgresModule } from '@knaadh/nestjs-drizzle-postgres';
 
 import * as schema from '@db/postgres/schema';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
 import { EmailModule, EmailProvider, EmailModuleConfig } from '@email';
+import { HealthModule } from './modules/health/health.module';
 
 @Module({
   imports: [
@@ -69,8 +68,9 @@ import { EmailModule, EmailProvider, EmailModuleConfig } from '@email';
       },
       inject: [ConfigService],
     }),
+    HealthModule,
   ],
-  controllers: [AppController],
-  providers: [AppService],
+  controllers: [],
+  providers: [],
 })
 export class AppModule {}
