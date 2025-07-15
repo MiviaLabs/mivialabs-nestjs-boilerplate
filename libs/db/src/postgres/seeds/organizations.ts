@@ -4,12 +4,12 @@ import { organization } from '../schema/organization';
 import { user } from '../schema/user';
 import { userOrganizationRole } from '../schema/user-organization-role';
 import { UserRole } from '../types/user-role.enum';
-import { systemTx } from '../rls-tx';
 import { hashPassword } from '../../../../../src/common/auth';
 
 const defaultOrganizations = [
   {
     name: 'Default Organization',
+    slug: 'default-organization',
     description: 'Default organization for the system',
     isActive: true,
   },
@@ -31,7 +31,7 @@ export async function seedOrganizations(db: PostgresDb): Promise<void> {
   console.log('🏢 Seeding organizations and users...');
 
   try {
-    await systemTx(db, async (tx) => {
+    await db.transaction(async (tx) => {
       // First, seed organizations
       const createdOrgs: { [key: string]: string } = {};
 

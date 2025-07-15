@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/unbound-method */
-
 import { Test, TestingModule } from '@nestjs/testing';
 import { HealthCheckError } from '@nestjs/terminus';
 import { DatabaseHealthIndicator } from './database.health-indicator';
