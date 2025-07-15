@@ -14,7 +14,7 @@ import {
 import { DatabaseHealthIndicator } from './indicators/database.health-indicator';
 import { RedisHealthIndicator } from './indicators/redis.health-indicator';
 import { RabbitMQHealthIndicator } from './indicators/rabbitmq.health-indicator';
-import { MinIOHealthIndicator } from './indicators/minio.health-indicator';
+import { StorageHealthIndicator } from './indicators/storage.health-indicator';
 
 @ApiTags('health')
 @Controller('health')
@@ -24,7 +24,7 @@ export class HealthController {
     private readonly databaseHealthIndicator: DatabaseHealthIndicator,
     private readonly redisHealthIndicator: RedisHealthIndicator,
     private readonly rabbitMQHealthIndicator: RabbitMQHealthIndicator,
-    private readonly minioHealthIndicator: MinIOHealthIndicator,
+    private readonly storageHealthIndicator: StorageHealthIndicator,
   ) {}
 
   @Get()
@@ -36,7 +36,7 @@ Performs comprehensive health checks on all critical infrastructure components:
 - **Database**: PostgreSQL connectivity and query execution
 - **Cache**: Redis connectivity with authentication
 - **Message Broker**: RabbitMQ connection and channel creation
-- **Object Storage**: MinIO accessibility (with graceful degradation)
+- **Object Storage**: S3-compatible storage accessibility (with graceful degradation)
 
 Returns detailed status information for monitoring and alerting systems.
     `.trim(),
@@ -89,15 +89,15 @@ Returns detailed status information for monitoring and alerting systems.
                 timestamp: { type: 'string', format: 'date-time' },
               },
             },
-            minio: {
+            storage: {
               type: 'object',
               properties: {
                 status: { type: 'string', enum: ['up', 'degraded'] },
                 message: {
                   type: 'string',
-                  example: 'MinIO storage accessible',
+                  example: 'S3-compatible storage accessible',
                 },
-                httpStatus: { type: 'number', example: 200 },
+                provider: { type: 'string', example: 'aws-s3' },
                 timestamp: { type: 'string', format: 'date-time' },
               },
             },
@@ -131,10 +131,10 @@ Returns detailed status information for monitoring and alerting systems.
             message: 'RabbitMQ connection successful',
             timestamp: '2025-07-13T10:30:00.200Z',
           },
-          minio: {
+          storage: {
             status: 'up',
-            message: 'MinIO storage accessible',
-            httpStatus: 200,
+            message: 'S3-compatible storage accessible',
+            provider: 'aws-s3',
             timestamp: '2025-07-13T10:30:00.300Z',
           },
         },
@@ -156,10 +156,10 @@ Returns detailed status information for monitoring and alerting systems.
             message: 'RabbitMQ connection successful',
             timestamp: '2025-07-13T10:30:00.200Z',
           },
-          minio: {
+          storage: {
             status: 'up',
-            message: 'MinIO storage accessible',
-            httpStatus: 200,
+            message: 'S3-compatible storage accessible',
+            provider: 'aws-s3',
             timestamp: '2025-07-13T10:30:00.300Z',
           },
         },
@@ -251,7 +251,7 @@ Returns detailed status information for monitoring and alerting systems.
       () => this.databaseHealthIndicator.isHealthy('database'),
       () => this.redisHealthIndicator.isHealthy('redis'),
       () => this.rabbitMQHealthIndicator.isHealthy('rabbitmq'),
-      () => this.minioHealthIndicator.isHealthy('minio'),
+      () => this.storageHealthIndicator.isHealthy('storage'),
     ]);
   }
 }

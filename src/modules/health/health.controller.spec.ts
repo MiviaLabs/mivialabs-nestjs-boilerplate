@@ -6,7 +6,7 @@ import { HealthController } from './health.controller';
 import { DatabaseHealthIndicator } from './indicators/database.health-indicator';
 import { RedisHealthIndicator } from './indicators/redis.health-indicator';
 import { RabbitMQHealthIndicator } from './indicators/rabbitmq.health-indicator';
-import { MinIOHealthIndicator } from './indicators/minio.health-indicator';
+import { StorageHealthIndicator } from './indicators/storage.health-indicator';
 
 describe('HealthController', () => {
   let controller: HealthController;
@@ -14,7 +14,7 @@ describe('HealthController', () => {
   let databaseHealthIndicator: DatabaseHealthIndicator;
   let redisHealthIndicator: RedisHealthIndicator;
   let rabbitMQHealthIndicator: RabbitMQHealthIndicator;
-  let minioHealthIndicator: MinIOHealthIndicator;
+  let storageHealthIndicator: StorageHealthIndicator;
 
   beforeEach(async () => {
     const mockHealthCheckService = {
@@ -33,7 +33,7 @@ describe('HealthController', () => {
       isHealthy: jest.fn(),
     };
 
-    const mockMinioHealthIndicator = {
+    const mockStorageHealthIndicator = {
       isHealthy: jest.fn(),
     };
 
@@ -57,8 +57,8 @@ describe('HealthController', () => {
           useValue: mockRabbitMQHealthIndicator,
         },
         {
-          provide: MinIOHealthIndicator,
-          useValue: mockMinioHealthIndicator,
+          provide: StorageHealthIndicator,
+          useValue: mockStorageHealthIndicator,
         },
       ],
     }).compile();
@@ -73,8 +73,9 @@ describe('HealthController', () => {
     rabbitMQHealthIndicator = module.get<RabbitMQHealthIndicator>(
       RabbitMQHealthIndicator,
     );
-    minioHealthIndicator =
-      module.get<MinIOHealthIndicator>(MinIOHealthIndicator);
+    storageHealthIndicator = module.get<StorageHealthIndicator>(
+      StorageHealthIndicator,
+    );
   });
 
   it('should be defined', () => {
@@ -89,14 +90,14 @@ describe('HealthController', () => {
           database: { status: 'up' },
           redis: { status: 'up' },
           rabbitmq: { status: 'up' },
-          minio: { status: 'up' },
+          storage: { status: 'up' },
         },
         error: {},
         details: {
           database: { status: 'up' },
           redis: { status: 'up' },
           rabbitmq: { status: 'up' },
-          minio: { status: 'up' },
+          storage: { status: 'up' },
         },
       };
 
@@ -119,7 +120,7 @@ describe('HealthController', () => {
         info: {
           redis: { status: 'up' },
           rabbitmq: { status: 'up' },
-          minio: { status: 'up' },
+          storage: { status: 'up' },
         },
         error: {
           database: { status: 'down', message: 'Connection failed' },
@@ -128,7 +129,7 @@ describe('HealthController', () => {
           database: { status: 'down', message: 'Connection failed' },
           redis: { status: 'up' },
           rabbitmq: { status: 'up' },
-          minio: { status: 'up' },
+          storage: { status: 'up' },
         },
       };
 
@@ -145,7 +146,7 @@ describe('HealthController', () => {
         jest.fn().mockResolvedValue({ database: { status: 'up' } }),
         jest.fn().mockResolvedValue({ redis: { status: 'up' } }),
         jest.fn().mockResolvedValue({ rabbitmq: { status: 'up' } }),
-        jest.fn().mockResolvedValue({ minio: { status: 'up' } }),
+        jest.fn().mockResolvedValue({ storage: { status: 'up' } }),
       ];
 
       jest
@@ -173,7 +174,7 @@ describe('HealthController', () => {
         .spyOn(rabbitMQHealthIndicator, 'isHealthy')
         .mockImplementation(mockHealthChecks[2]);
       jest
-        .spyOn(minioHealthIndicator, 'isHealthy')
+        .spyOn(storageHealthIndicator, 'isHealthy')
         .mockImplementation(mockHealthChecks[3]);
 
       await controller.check();
@@ -187,9 +188,9 @@ describe('HealthController', () => {
       expect(
         jest.mocked(rabbitMQHealthIndicator.isHealthy),
       ).toHaveBeenCalledWith('rabbitmq');
-      expect(jest.mocked(minioHealthIndicator.isHealthy)).toHaveBeenCalledWith(
-        'minio',
-      );
+      expect(
+        jest.mocked(storageHealthIndicator.isHealthy),
+      ).toHaveBeenCalledWith('storage');
     });
   });
 });
