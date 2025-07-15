@@ -1,5 +1,5 @@
 {
-  "id": "fb95308d-61aa-4716-9a37-c22c551001fa",
+  "id": "8bd50cb5-3ef9-4824-a479-a0fea2e1978b",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -298,14 +298,14 @@
           ],
           "using": "\"event\".\"organization_id\" IS NULL OR \"event\".\"organization_id\" = current_setting('app.current_organization_id')::uuid"
         },
-        "event_insert_organization": {
-          "name": "event_insert_organization",
+        "event_insert_system_only": {
+          "name": "event_insert_system_only",
           "as": "PERMISSIVE",
           "for": "INSERT",
           "to": [
-            "authenticated"
+            "system"
           ],
-          "withCheck": "\"event\".\"organization_id\" IS NULL OR \"event\".\"organization_id\" = current_setting('app.current_organization_id')::uuid"
+          "withCheck": "true"
         },
         "event_system_admin_full_access": {
           "name": "event_system_admin_full_access",
@@ -381,6 +381,16 @@
           ],
           "using": "true"
         },
+        "organization_update_owner_only": {
+          "name": "organization_update_owner_only",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "current_setting('app.current_user_role', true) = 'organization_owner'",
+          "withCheck": "current_setting('app.current_user_role', true) = 'organization_owner'"
+        },
         "organization_system_admin_full_access": {
           "name": "organization_system_admin_full_access",
           "as": "PERMISSIVE",
@@ -394,9 +404,261 @@
       },
       "checkConstraints": {},
       "isRLSEnabled": true
+    },
+    "public.user": {
+      "name": "user",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "password_hash": {
+          "name": "password_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "NULL"
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "is_email_verified": {
+          "name": "is_email_verified",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "is_system_admin": {
+          "name": "is_system_admin",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp(3) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "CURRENT_TIMESTAMP"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp(3) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "CURRENT_TIMESTAMP"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "user_organization_id_organization_id_fk": {
+          "name": "user_organization_id_organization_id_fk",
+          "tableFrom": "user",
+          "tableTo": "organization",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "user_email_unique": {
+          "name": "user_email_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "email"
+          ]
+        }
+      },
+      "policies": {
+        "user_select_organization": {
+          "name": "user_select_organization",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "\"user\".\"organization_id\" = current_setting('app.current_organization_id')::uuid"
+        },
+        "user_update_self": {
+          "name": "user_update_self",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "\"user\".\"id\" = current_setting('app.current_user_id')::uuid",
+          "withCheck": "\"user\".\"id\" = current_setting('app.current_user_id')::uuid"
+        },
+        "user_insert_system_only": {
+          "name": "user_insert_system_only",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "system"
+          ],
+          "withCheck": "true"
+        },
+        "user_system_admin_full_access": {
+          "name": "user_system_admin_full_access",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "system_admin"
+          ],
+          "using": "true",
+          "withCheck": "true"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.user_organization_role": {
+      "name": "user_organization_role",
+      "schema": "",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "role": {
+          "name": "role",
+          "type": "user_role",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "user_organization_role_user_id_user_id_fk": {
+          "name": "user_organization_role_user_id_user_id_fk",
+          "tableFrom": "user_organization_role",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "user_organization_role_organization_id_organization_id_fk": {
+          "name": "user_organization_role_organization_id_organization_id_fk",
+          "tableFrom": "user_organization_role",
+          "tableTo": "organization",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "user_organization_role_user_id_organization_id_pk": {
+          "name": "user_organization_role_user_id_organization_id_pk",
+          "columns": [
+            "user_id",
+            "organization_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {
+        "user_org_role_select_organization": {
+          "name": "user_org_role_select_organization",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "\"user_organization_role\".\"organization_id\" = current_setting('app.current_organization_id')::uuid"
+        },
+        "user_org_role_manage_owner_only": {
+          "name": "user_org_role_manage_owner_only",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "authenticated"
+          ],
+          "using": "\"user_organization_role\".\"organization_id\" = current_setting('app.current_organization_id')::uuid AND current_setting('app.current_user_role', true) = 'organization_owner'",
+          "withCheck": "\"user_organization_role\".\"organization_id\" = current_setting('app.current_organization_id')::uuid AND current_setting('app.current_user_role', true) = 'organization_owner'"
+        },
+        "user_org_role_system_full_access": {
+          "name": "user_org_role_system_full_access",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "system"
+          ],
+          "using": "true",
+          "withCheck": "true"
+        },
+        "user_org_role_system_admin_full_access": {
+          "name": "user_org_role_system_admin_full_access",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "system_admin"
+          ],
+          "using": "true",
+          "withCheck": "true"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": true
     }
   },
-  "enums": {},
+  "enums": {
+    "public.user_role": {
+      "name": "user_role",
+      "schema": "public",
+      "values": [
+        "system_admin",
+        "organization_owner",
+        "organization_member"
+      ]
+    }
+  },
   "schemas": {},
   "sequences": {},
   "roles": {
@@ -408,6 +670,12 @@
     },
     "system_admin": {
       "name": "system_admin",
+      "createDb": false,
+      "createRole": false,
+      "inherit": true
+    },
+    "system": {
+      "name": "system",
       "createDb": false,
       "createRole": false,
       "inherit": true

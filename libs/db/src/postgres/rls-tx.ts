@@ -4,6 +4,7 @@ import { Logger } from '@nestjs/common';
 
 import { PostgresDb } from './types/postgres-db.type';
 import { PgTransaction } from 'drizzle-orm/pg-core';
+import { UserRole } from './types/user-role.enum';
 import * as schema from './schema';
 
 const logger = new Logger('RLS-Transaction');
@@ -11,6 +12,7 @@ const logger = new Logger('RLS-Transaction');
 export interface RLSContext {
   organizationId: string;
   userId?: string;
+  userRole?: UserRole;
   isSystemAdmin?: boolean;
   sessionId?: string;
 }
@@ -50,6 +52,13 @@ export const rlsTx = <T>(
         );
       }
 
+      // Set user role context if provided
+      if (rlsContext.userRole) {
+        await tx.execute(
+          sql.raw(`SET app.current_user_role = '${rlsContext.userRole}'`),
+        );
+      }
+
       // Set session context if provided
       if (rlsContext.sessionId) {
         await tx.execute(
@@ -57,8 +66,16 @@ export const rlsTx = <T>(
         );
       }
 
+      // Set database role based on user role
+      if (rlsContext.userRole === UserRole.SYSTEM_ADMIN) {
+        await tx.execute(sql.raw(`SET ROLE system_admin`));
+      } else if (rlsContext.userRole) {
+        // All other roles are treated as authenticated
+        await tx.execute(sql.raw(`SET ROLE authenticated`));
+      }
+
       logger.debug(
-        `RLS context set: org=${rlsContext.organizationId}, user=${rlsContext.userId}, admin=${rlsContext.isSystemAdmin}`,
+        `RLS context set: org=${rlsContext.organizationId}, user=${rlsContext.userId}, role=${rlsContext.userRole}, admin=${rlsContext.isSystemAdmin}`,
       );
 
       return await cb(tx);
@@ -110,6 +127,49 @@ export const systemAdminTx = <T>(
       }
 
       logger.error('System admin transaction failed:', error);
+      throw error;
+    }
+  });
+};
+
+/**
+ * Execute a database transaction as system (for event sourcing writes)
+ * Only use this for internal system operations like event store writes
+ */
+export const systemTx = <T>(
+  db: PostgresDb,
+  cb: (
+    tx: PgTransaction<
+      PostgresJsQueryResultHKT,
+      typeof schema,
+      ExtractTablesWithRelations<typeof schema>
+    >,
+  ) => T | Promise<T>,
+): Promise<T> => {
+  return db.transaction(async (tx) => {
+    try {
+      // Set role to system for event sourcing operations
+      await tx.execute(sql.raw(`SET ROLE system`));
+
+      logger.debug('System transaction started (for event sourcing)');
+
+      const result = await cb(tx);
+
+      // Reset role back to default
+      await tx.execute(sql.raw(`RESET ROLE`));
+
+      logger.debug('System transaction completed, role reset');
+
+      return result;
+    } catch (error) {
+      // Ensure role is reset even on error
+      try {
+        await tx.execute(sql.raw(`RESET ROLE`));
+      } catch (resetError) {
+        logger.error('Failed to reset role after error:', resetError);
+      }
+
+      logger.error('System transaction failed:', error);
       throw error;
     }
   });

@@ -13,13 +13,13 @@ config();
 
 // Function to extract hostname from URL
 const getHostFromUrl = (dbUrl: string) => {
-    try {
-        const parsedUrl = new url.URL(dbUrl);
-        return parsedUrl.hostname;
-    } catch (error) {
-        console.error('Error parsing URL:', error);
-        return null;
-    }
+  try {
+    const parsedUrl = new url.URL(dbUrl);
+    return parsedUrl.hostname;
+  } catch (error) {
+    console.error('Error parsing URL:', error);
+    return null;
+  }
 };
 
 // Connect to database with connection string - DNS settings will prefer IPv4
@@ -29,39 +29,39 @@ const hostname = getHostFromUrl(connectionString);
 console.log(`Using database host: ${hostname}`);
 
 const sql = postgres(connectionString, {
-    max: 1,
-    connect_timeout: 30,
-    idle_timeout: 30,
-    ssl: false
+  max: 1,
+  connect_timeout: 30,
+  idle_timeout: 30,
+  ssl: false,
 });
 
 const db = drizzle(sql);
 
 async function seed() {
-    try {
-        console.log('🌱 Starting seeding process...');
+  try {
+    console.log('🌱 Starting seeding process...');
 
-        // Seed users first
-        // await seedUsers(db as unknown as PostgresDb);
+    // Seed users first
+    // await seedUsers(db as unknown as PostgresDb);
 
-        // Seed tools and agents
-        seedDatabase();
+    // Seed tools and agents
+    await seedDatabase(db as unknown as PostgresDb);
 
-        console.log('✅ All seeds completed successfully!');
-    } catch (error) {
-        console.error('❌ Seeding failed:', error);
-        throw error;
-    }
+    console.log('✅ All seeds completed successfully!');
+  } catch (error) {
+    console.error('❌ Seeding failed:', error);
+    throw error;
+  }
 }
 
 (async () => {
-    try {
-        await seed();
-    } catch (error) {
-        console.error('Seeding process failed:', error);
-        process.exit(1);
-    } finally {
-        await sql.end();
-        process.exit(0);
-    }
-})(); 
+  try {
+    await seed();
+  } catch (error) {
+    console.error('Seeding process failed:', error);
+    process.exit(1);
+  } finally {
+    await sql.end();
+    process.exit(0);
+  }
+})();

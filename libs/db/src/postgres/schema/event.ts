@@ -12,7 +12,7 @@ import { sql } from 'drizzle-orm';
 
 import { timestamps } from '../helpers';
 import { organization } from './organization';
-import { authenticatedRole, systemAdminRole } from './rls-roles';
+import { authenticatedRole, systemAdminRole, systemRole } from './rls-roles';
 import type { EventPayload } from '@events';
 
 export const event = pgTable(
@@ -72,19 +72,22 @@ export const event = pgTable(
     ),
     index('event_type_time_idx').on(table.eventType, table.createdAt),
 
-    // RLS Policies
+    // RLS Policies for Event Sourcing
+    // Authenticated users can only read events from their organization
     pgPolicy('event_select_organization', {
       for: 'select',
       to: authenticatedRole,
       using: sql`${table.organizationId} IS NULL OR ${table.organizationId} = current_setting('app.current_organization_id')::uuid`,
     }),
 
-    pgPolicy('event_insert_organization', {
+    // Only system processes can insert events (event sourcing pattern)
+    pgPolicy('event_insert_system_only', {
       for: 'insert',
-      to: authenticatedRole,
-      withCheck: sql`${table.organizationId} IS NULL OR ${table.organizationId} = current_setting('app.current_organization_id')::uuid`,
+      to: systemRole,
+      withCheck: sql`true`,
     }),
 
+    // System admins have full access for debugging/maintenance
     pgPolicy('event_system_admin_full_access', {
       for: 'all',
       to: systemAdminRole,

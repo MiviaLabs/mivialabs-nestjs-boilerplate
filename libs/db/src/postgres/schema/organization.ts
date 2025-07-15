@@ -21,6 +21,13 @@ export const organization = pgTable(
       using: sql`true`, // Allow all authenticated users to select organizations
     }),
 
+    pgPolicy('organization_update_owner_only', {
+      for: 'update',
+      to: authenticatedRole,
+      using: sql`current_setting('app.current_user_role', true) = 'organization_owner'`,
+      withCheck: sql`current_setting('app.current_user_role', true) = 'organization_owner'`,
+    }),
+
     pgPolicy('organization_system_admin_full_access', {
       for: 'all',
       to: systemAdminRole,
