@@ -5,6 +5,7 @@ import { DrizzlePostgresModule } from '@knaadh/nestjs-drizzle-postgres';
 import * as schema from '@db/postgres/schema';
 import { EmailModule, EmailProvider, EmailModuleConfig } from '@email';
 import { HealthModule } from './modules/health/health.module';
+import { StorageConfig, StorageModule, StorageProvider } from '@storage';
 
 @Module({
   imports: [
@@ -66,6 +67,31 @@ import { HealthModule } from './modules/health/health.module';
           },
         };
       },
+      inject: [ConfigService],
+    }),
+    StorageModule.forRootAsync({
+      isGlobal: true,
+      imports: [ConfigModule],
+      useFactory: (configService: ConfigService): StorageConfig => ({
+        provider: configService.get<StorageProvider>(
+          'STORAGE_PROVIDER',
+          'minio' as StorageProvider,
+        ),
+        accessKeyId: configService.get<string>('STORAGE_ACCESS_KEY_ID'),
+        secretAccessKey: configService.get<string>('STORAGE_SECRET_ACCESS_KEY'),
+        region: configService.get<string>('STORAGE_REGION', 'us-east-1'),
+        // MinIO specific
+        minioHost: configService.get<string>('MINIO_HOST', 'localhost'),
+        minioPort: configService.get<number>('MINIO_PORT', 9000),
+        // Cloudflare R2 specific
+        cloudflareAccountId: configService.get<string>('CLOUDFLARE_ACCOUNT_ID'),
+        // Generic S3-compatible
+        endpoint: configService.get<string>('STORAGE_ENDPOINT'),
+        forcePathStyle: configService.get<boolean>(
+          'STORAGE_FORCE_PATH_STYLE',
+          true,
+        ),
+      }),
       inject: [ConfigService],
     }),
     HealthModule,
