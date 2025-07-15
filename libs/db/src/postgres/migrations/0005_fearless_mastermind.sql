@@ -1,0 +1,1 @@
+CREATE POLICY "organization_select_system" ON "organization" AS PERMISSIVE FOR SELECT TO "system" USING (true);

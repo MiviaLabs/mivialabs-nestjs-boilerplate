@@ -1,0 +1,1 @@
+CREATE POLICY "organization_insert_system" ON "organization" AS PERMISSIVE FOR INSERT TO "system" WITH CHECK (true);

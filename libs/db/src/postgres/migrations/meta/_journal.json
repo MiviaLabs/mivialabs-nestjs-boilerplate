@@ -22,6 +22,27 @@
       "when": 1752545029001,
       "tag": "0002_mean_echo",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1752552718917,
+      "tag": "0003_sloppy_changeling",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1752552888769,
+      "tag": "0004_bumpy_susan_delgado",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1752552950742,
+      "tag": "0005_fearless_mastermind",
+      "breakpoints": true
     }
   ]
 }

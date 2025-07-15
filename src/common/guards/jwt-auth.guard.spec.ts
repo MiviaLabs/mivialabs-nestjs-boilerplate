@@ -108,6 +108,8 @@ describe('JwtAuthGuard', () => {
       switchToHttp: jest.fn().mockReturnValue({
         getRequest: jest.fn().mockReturnValue(mockRequest),
       }),
+      getHandler: jest.fn().mockReturnValue({}),
+      getClass: jest.fn().mockReturnValue({}),
     } as unknown as jest.Mocked<ExecutionContext>;
 
     // Set environment variable for testing
@@ -153,7 +155,7 @@ describe('JwtAuthGuard', () => {
 
     it('should return true for valid JWT token with userId instead of sub', async () => {
       const payload = {
-        userId: 'user456',
+        sub: 'user456',
         iat: Math.floor(Date.now() / 1000),
         exp: Math.floor(Date.now() / 1000) + 3600,
       };

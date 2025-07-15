@@ -5,10 +5,12 @@ import {
   UnauthorizedException,
   Inject,
 } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
 import * as jwt from 'jsonwebtoken';
 import { eq, sql, and } from 'drizzle-orm';
 import { PostgresDb, user, User, userOrganizationRole, UserRole } from '@db';
+import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 
 export interface AuthenticatedUser {
   id: string;
@@ -22,7 +24,6 @@ export interface AuthenticatedUser {
 
 interface JwtPayload {
   sub?: string;
-  userId?: string;
   organizationId?: string;
   role?: UserRole;
   isSystemAdmin?: boolean;
@@ -42,9 +43,22 @@ interface RequestWithUser extends Request {
  */
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
-  constructor(@Inject('DB') private readonly db: PostgresDb) {}
+  constructor(
+    @Inject('DB') private readonly db: PostgresDb,
+    private readonly reflector: Reflector,
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    // Check if route is marked as public
+    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+
+    if (isPublic) {
+      return true;
+    }
+
     const request = context.switchToHttp().getRequest<RequestWithUser>();
     const token = this.extractTokenFromHeader(request);
 
@@ -107,7 +121,7 @@ export class JwtAuthGuard implements CanActivate {
   private async getUserFromDatabase(
     payload: JwtPayload,
   ): Promise<AuthenticatedUser> {
-    const userId = payload.sub || payload.userId;
+    const userId = payload.sub;
 
     if (!userId) {
       throw new UnauthorizedException('Authentication failed');

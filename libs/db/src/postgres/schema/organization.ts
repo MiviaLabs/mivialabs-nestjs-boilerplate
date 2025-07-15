@@ -9,6 +9,7 @@ export const organization = pgTable(
   {
     id: uuid('id').primaryKey().defaultRandom(),
     name: text('name').notNull(),
+    slug: text('slug').notNull().unique(),
     description: text('description').default(sql`NULL`),
     isActive: boolean('is_active').notNull().default(false),
     ...timestamps,
@@ -26,6 +27,20 @@ export const organization = pgTable(
       to: authenticatedRole,
       using: sql`current_setting('app.current_user_role', true) = 'organization_owner'`,
       withCheck: sql`current_setting('app.current_user_role', true) = 'organization_owner'`,
+    }),
+
+    // Allow system to insert organizations (for seeding and signup)
+    pgPolicy('organization_insert_system', {
+      for: 'insert',
+      to: ['system'],
+      withCheck: sql`true`,
+    }),
+
+    // Allow system to select organizations (for seeding)
+    pgPolicy('organization_select_system', {
+      for: 'select',
+      to: ['system'],
+      using: sql`true`,
     }),
 
     pgPolicy('organization_system_admin_full_access', {

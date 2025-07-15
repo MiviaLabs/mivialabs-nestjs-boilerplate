@@ -1,5 +1,5 @@
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
-import { AuthenticatedUser } from '../guards/jwt-auth.guard';
+import { AuthenticatedUser } from '../../modules/auth/interfaces/authenticated-user.interface';
 
 interface RequestWithUser {
   user?: AuthenticatedUser;
