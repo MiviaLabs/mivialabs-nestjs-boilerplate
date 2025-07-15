@@ -7,15 +7,19 @@
   "rootDir": ".",
   "testEnvironment": "node",
   "testRegex": ".e2e-spec.ts$",
+  "testTimeout": 120000,
   "transform": {
     "^.+\\.(t|j)s$": "ts-jest"
   },
   "moduleNameMapper": {
-    "@db/db": "<rootDir>/../libs/db/src",
-    "@db/db/(.*)": "<rootDir>/../libs/db/src/$1",
-    "@events": "<rootDir>/../libs/events/src",
-    "@events/(.*)": "<rootDir>/../libs/events/src/$1",
-    "@storage/storage": "<rootDir>/../libs/storage/src",
-    "@storage/storage/(.*)": "<rootDir>/../libs/storage/src/$1"
-  }
+    "^@db(|/.*)$": "<rootDir>/../libs/db/src/$1",
+    "^@email(|/.*)$": "<rootDir>/../libs/email/src/$1",
+    "^@events(|/.*)$": "<rootDir>/../libs/events/src/$1",
+    "^@storage(|/.*)$": "<rootDir>/../libs/storage/src/$1"
+  },
+  "globalSetup": "./global-setup.ts",
+  "globalTeardown": "./global-teardown.ts",
+  "maxWorkers": 1,
+  "forceExit": true,
+  "detectOpenHandles": true
 }

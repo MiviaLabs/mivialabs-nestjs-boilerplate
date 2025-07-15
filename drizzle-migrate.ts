@@ -28,7 +28,7 @@ const sql = postgres(connectionString, {
   max: 1,
   connect_timeout: 30,
   idle_timeout: 30,
-  ssl: false
+  ssl: false,
 });
 
 const db = drizzle(sql);
@@ -36,7 +36,9 @@ const db = drizzle(sql);
 (async () => {
   try {
     console.log(`Starting database migration...`);
-    await migrate(db, { migrationsFolder: './libs/db/src/postgres/migrations' });
+    await migrate(db, {
+      migrationsFolder: './libs/db/src/postgres/migrations',
+    });
     console.log(`Migration completed successfully!`);
   } catch (error) {
     console.error('Migration failed:', error);
