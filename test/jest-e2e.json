@@ -1,5 +1,9 @@
 {
-  "moduleFileExtensions": ["js", "json", "ts"],
+  "moduleFileExtensions": [
+    "js",
+    "json",
+    "ts"
+  ],
   "rootDir": ".",
   "testEnvironment": "node",
   "testRegex": ".e2e-spec.ts$",
@@ -10,6 +14,8 @@
     "@db/db": "<rootDir>/../libs/db/src",
     "@db/db/(.*)": "<rootDir>/../libs/db/src/$1",
     "@events": "<rootDir>/../libs/events/src",
-    "@events/(.*)": "<rootDir>/../libs/events/src/$1"
+    "@events/(.*)": "<rootDir>/../libs/events/src/$1",
+    "@storage/storage": "<rootDir>/../libs/storage/src",
+    "@storage/storage/(.*)": "<rootDir>/../libs/storage/src/$1"
   }
 }

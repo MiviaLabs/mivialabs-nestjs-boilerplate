@@ -28,6 +28,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.844.0",
     "@aws-sdk/client-ses": "^3.844.0",
+    "@aws-sdk/s3-request-presigner": "^3.844.0",
     "@knaadh/nestjs-drizzle-postgres": "^1.2.0",
     "@nestjs/bullmq": "^11.0.2",
     "@nestjs/common": "^11.0.1",
@@ -120,7 +121,8 @@
     "moduleNameMapper": {
       "^@db(|/.*)$": "<rootDir>/libs/db/src/$1",
       "^@email(|/.*)$": "<rootDir>/libs/email/src/$1",
-      "^@events(|/.*)$": "<rootDir>/libs/events/src/$1"
+      "^@events(|/.*)$": "<rootDir>/libs/events/src/$1",
+      "^@storage(|/.*)$": "<rootDir>/libs/storage/src/$1"
     }
   }
 }
