@@ -73,7 +73,7 @@ export const refreshToken = pgTable(
 
     // Allow system role access for authentication operations (safer than public)
     pgPolicy('refresh_token_system_auth_access', {
-      for: 'select',
+      for: 'all',
       to: systemRole,
       using: sql`true`,
     }),

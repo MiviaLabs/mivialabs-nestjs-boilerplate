@@ -3,4 +3,5 @@ export interface JwtTokenPair {
   refreshToken: string;
   accessTokenExpiresAt: Date;
   refreshTokenExpiresAt: Date;
+  expiresIn?: number; // Access token expiry in seconds
 }

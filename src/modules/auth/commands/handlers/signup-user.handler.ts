@@ -25,7 +25,10 @@ import { OrganizationSlugAvailabilityResult } from '../../interfaces/organizatio
 import {
   OrganizationSignupCompletedEventPayload,
   AuthSessionCreatedEventPayload,
+  OrganizationCreatedEventPayload,
+  UserCreatedEventPayload,
 } from '@events';
+import { UserRole } from '@db';
 
 @CommandHandler(SignupUserCommand)
 @Injectable()
@@ -97,10 +100,11 @@ export class SignupUserHandler implements ICommandHandler<SignupUserCommand> {
         );
 
         // 4. Check if accounts should be active after signup
-        const isAccountActiveAfterSignup = this.configService.get<boolean>(
-          'APP_ACCOUNT_ACTIVE_AFTER_SIGNUP',
-          false,
-        );
+        const isAccountActiveAfterSignup =
+          this.configService.get<string>(
+            'APP_ACCOUNT_ACTIVE_AFTER_SIGNUP',
+            'false',
+          ) === 'true';
 
         // 5. Create organization
         const organizationId = uuidv4();
@@ -171,31 +175,41 @@ export class SignupUserHandler implements ICommandHandler<SignupUserCommand> {
       };
 
       // 9. Log events (outside transaction to avoid blocking)
-      await Promise.all([
-        this.logOrganizationCreated(orgData, signupDto, contextWithIds),
-        this.logUserCreated(userData, contextWithIds),
-        this.logUserSignedUp(userData, orgData, signupDto, contextWithIds),
-        this.logAuthSessionCreated(
-          userData,
-          tokenPair,
-          refreshTokenId,
-          contextWithIds,
-        ),
-      ]);
-
-      this.logger.log(
-        `User signup successful for user ID: ${userData.id} in organization: ${orgData.slug}`,
+      // Events for the same aggregate must be serialized to maintain proper sequence numbering
+      // Use non-blocking event logging to avoid sequence conflicts
+      await this.logOrganizationCreated(orgData, contextWithIds).catch(
+        (error) => {
+          this.logger.error('Failed to log organization created event', error);
+        },
       );
+
+      await this.logUserCreated(userData, contextWithIds).catch((error) => {
+        this.logger.error('Failed to log user created event', error);
+      });
+
+      await this.logUserSignedUp(
+        userData,
+        orgData,
+        signupDto,
+        contextWithIds,
+      ).catch((error) => {
+        this.logger.error('Failed to log user signed up event', error);
+      });
+
+      await this.logAuthSessionCreated(
+        userData,
+        tokenPair,
+        refreshTokenId,
+        contextWithIds,
+      ).catch((error) => {
+        this.logger.error('Failed to log auth session created event', error);
+      });
 
       return {
         accessToken: tokenPair.accessToken,
         refreshToken: tokenPair.refreshToken,
-        accessTokenExpiresAt: new Date(
-          Date.now() + 15 * 60 * 1000,
-        ).toISOString(),
-        refreshTokenExpiresAt: new Date(
-          Date.now() + 7 * 24 * 60 * 60 * 1000,
-        ).toISOString(),
+        accessTokenExpiresAt: tokenPair.accessTokenExpiresAt.toISOString(),
+        refreshTokenExpiresAt: tokenPair.refreshTokenExpiresAt.toISOString(),
         user: {
           id: userData.id,
           email: userData.email,
@@ -223,7 +237,11 @@ export class SignupUserHandler implements ICommandHandler<SignupUserCommand> {
     token: string,
   ): Promise<void> {
     const tokenHash = await this.passwordService.hashPassword(token);
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+    const refreshTokenExpiration =
+      this.configService.get<string>('JWT_REFRESH_TOKEN_EXPIRATION') || '7d';
+    const expiresAt = new Date(
+      Date.now() + this.parseExpirationToMs(refreshTokenExpiration),
+    );
 
     await tx.insert(refreshToken).values({
       id: tokenId,
@@ -235,26 +253,61 @@ export class SignupUserHandler implements ICommandHandler<SignupUserCommand> {
     });
   }
 
-  private logOrganizationCreated(
-    /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
-    orgData: unknown,
-    /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
-    signupDto: unknown,
-    /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
+  private async logOrganizationCreated(
+    orgData: Organization,
     context: EventContext,
   ): Promise<void> {
-    // TODO: Fix event interface compatibility
-    return Promise.resolve();
+    const organizationCreatedEvent: OrganizationCreatedEventPayload = {
+      eventId: uuidv4(),
+      eventType: 'OrganizationCreatedEvent',
+      aggregateId: orgData.id,
+      aggregateType: 'Organization',
+      timestamp: new Date().toISOString(),
+      data: {
+        organizationId: orgData.id,
+        name: orgData.name,
+        description: orgData.description,
+        isActive: orgData.isActive,
+        createdBy: context.userId!,
+      },
+    };
+
+    try {
+      await this.eventsService.saveAuditEvent(
+        context,
+        organizationCreatedEvent,
+      );
+    } catch (error) {
+      this.logger.error('Failed to log organization created event', error);
+    }
   }
 
-  private logUserCreated(
-    /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
+  private async logUserCreated(
     userData: User,
-    /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
     context: EventContext,
   ): Promise<void> {
-    // TODO: Fix event interface compatibility
-    return Promise.resolve();
+    const userCreatedEvent: UserCreatedEventPayload = {
+      eventId: uuidv4(),
+      eventType: 'UserCreatedEvent',
+      aggregateId: userData.id,
+      aggregateType: 'User',
+      timestamp: new Date().toISOString(),
+      data: {
+        userId: userData.id,
+        organizationId: userData.organizationId!,
+        email: await this.hashData(userData.email), // Hash PII data
+        isActive: userData.isActive,
+        isEmailVerified: userData.isEmailVerified,
+        isSystemAdmin: userData.isSystemAdmin,
+        timestamp: new Date(),
+      },
+    };
+
+    try {
+      await this.eventsService.saveAuditEvent(context, userCreatedEvent);
+    } catch (error) {
+      this.logger.error('Failed to log user created event', error);
+    }
   }
 
   private async logUserSignedUp(
@@ -269,7 +322,7 @@ export class SignupUserHandler implements ICommandHandler<SignupUserCommand> {
       organizationName: (signupDto as { organizationName: string })
         .organizationName,
       organizationSlug: orgData.slug || undefined,
-      userRole: 'owner', // Default role for organization creator
+      userRole: UserRole.ORGANIZATION_OWNER,
       signupMethod: 'email_password',
       ipAddress: context.ipAddress
         ? await this.hashData(context.ipAddress)
@@ -305,7 +358,7 @@ export class SignupUserHandler implements ICommandHandler<SignupUserCommand> {
       userAgent: context.userAgent
         ? await this.hashData(context.userAgent)
         : undefined,
-      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+      expiresAt: tokenPair.refreshTokenExpiresAt,
       timestamp: new Date(),
     };
 
@@ -316,11 +369,25 @@ export class SignupUserHandler implements ICommandHandler<SignupUserCommand> {
     }
   }
 
-  private async hashEmail(email: string): Promise<string> {
-    return this.passwordService.hashPassword(email.toLowerCase());
-  }
-
   private async hashData(data: string): Promise<string> {
     return this.passwordService.hashPassword(data);
+  }
+
+  private parseExpirationToMs(expiration: string): number {
+    const unit = expiration.slice(-1);
+    const value = parseInt(expiration.slice(0, -1));
+
+    switch (unit) {
+      case 's':
+        return value * 1000;
+      case 'm':
+        return value * 60 * 1000;
+      case 'h':
+        return value * 60 * 60 * 1000;
+      case 'd':
+        return value * 24 * 60 * 60 * 1000;
+      default:
+        return 7 * 24 * 60 * 60 * 1000; // Default 7 days for refresh tokens
+    }
   }
 }

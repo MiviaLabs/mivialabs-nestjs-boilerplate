@@ -119,13 +119,8 @@ export const systemAdminTx = <T>(
 
       return result;
     } catch (error) {
-      // Ensure role is reset even on error
-      try {
-        await tx.execute(sql.raw(`RESET ROLE`));
-      } catch (resetError) {
-        logger.error('Failed to reset role after error:', resetError);
-      }
-
+      // Don't try to reset role if transaction is already aborted
+      // The role will be reset when the transaction is rolled back
       logger.error('System admin transaction failed:', error);
       throw error;
     }
@@ -162,13 +157,8 @@ export const systemTx = <T>(
 
       return result;
     } catch (error) {
-      // Ensure role is reset even on error
-      try {
-        await tx.execute(sql.raw(`RESET ROLE`));
-      } catch (resetError) {
-        logger.error('Failed to reset role after error:', resetError);
-      }
-
+      // Don't try to reset role if transaction is already aborted
+      // The role will be reset when the transaction is rolled back
       logger.error('System transaction failed:', error);
       throw error;
     }

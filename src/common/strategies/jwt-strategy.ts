@@ -1,6 +1,7 @@
 import { Injectable, UnauthorizedException, Inject } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
+import { ConfigService } from '@nestjs/config';
 import { eq, and } from 'drizzle-orm';
 import {
   PostgresDb,
@@ -9,6 +10,7 @@ import {
   userOrganizationRole,
   UserRole,
 } from '@db';
+import { TokenType } from '../../modules/auth/enums/token-type.enum';
 
 /**
  * JWT Payload interface
@@ -21,6 +23,7 @@ export interface JwtPayload {
   isSystemAdmin?: boolean;
   iat: number;
   exp: number;
+  type?: TokenType; // Token type for validation
 }
 
 /**
@@ -43,12 +46,13 @@ export interface AuthenticatedUser {
  * It fetches user details from the database and validates their status.
  */
 @Injectable()
-export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor(@Inject('DB') private readonly db: PostgresDb) {
-    const jwtSecret = process.env.JWT_SECRET;
-    if (!jwtSecret) {
-      throw new Error('JWT_SECRET environment variable is required');
-    }
+export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
+  constructor(
+    @Inject('DB') private readonly db: PostgresDb,
+    private readonly configService: ConfigService,
+  ) {
+    // Use JWT_SECRET for all JWT operations
+    const jwtSecret = configService.getOrThrow<string>('JWT_SECRET');
 
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -69,6 +73,13 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
     if (!userId) {
       throw new UnauthorizedException('Invalid token: missing user ID');
+    }
+
+    // Validate that this is an access token, not a refresh token
+    if (payload.type && payload.type !== TokenType.ACCESS) {
+      throw new UnauthorizedException(
+        'Invalid token type: only access tokens are accepted',
+      );
     }
 
     try {

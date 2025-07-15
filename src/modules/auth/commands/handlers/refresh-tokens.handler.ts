@@ -5,6 +5,7 @@ import {
   UnauthorizedException,
   Logger,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { v4 as uuidv4 } from 'uuid';
 import { eq, and, sql } from 'drizzle-orm';
 import { PostgresDb } from '@db/postgres/types/postgres-db.type';
@@ -33,6 +34,7 @@ export class RefreshTokensHandler
     private readonly jwtService: JwtService,
     private readonly passwordService: PasswordService,
     private readonly eventsService: EventsService,
+    private readonly configService: ConfigService,
   ) {}
 
   async execute(command: RefreshTokensCommand): Promise<JwtTokenPair> {
@@ -179,7 +181,12 @@ export class RefreshTokensHandler
           const tokenHash = await this.passwordService.hashPassword(
             newTokenPair.refreshToken,
           );
-          const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+          const refreshTokenExpiration =
+            this.configService.get<string>('JWT_REFRESH_TOKEN_EXPIRATION') ||
+            '7d';
+          const expiresAt = new Date(
+            Date.now() + this.parseExpirationToMs(refreshTokenExpiration),
+          );
 
           await tx.insert(refreshToken).values({
             id: newRefreshTokenId,
@@ -367,5 +374,23 @@ export class RefreshTokensHandler
 
   private async hashData(data: string): Promise<string> {
     return this.passwordService.hashPassword(data);
+  }
+
+  private parseExpirationToMs(expiration: string): number {
+    const unit = expiration.slice(-1);
+    const value = parseInt(expiration.slice(0, -1));
+
+    switch (unit) {
+      case 's':
+        return value * 1000;
+      case 'm':
+        return value * 60 * 1000;
+      case 'h':
+        return value * 60 * 60 * 1000;
+      case 'd':
+        return value * 24 * 60 * 60 * 1000;
+      default:
+        return 7 * 24 * 60 * 60 * 1000; // Default 7 days for refresh tokens
+    }
   }
 }

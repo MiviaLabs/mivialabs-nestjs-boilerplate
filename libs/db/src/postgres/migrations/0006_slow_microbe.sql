@@ -1,0 +1,1 @@
+CREATE POLICY "event_select_system" ON "event" AS PERMISSIVE FOR SELECT TO "system" USING (true);

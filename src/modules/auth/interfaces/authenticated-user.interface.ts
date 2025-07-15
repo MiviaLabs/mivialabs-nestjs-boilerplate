@@ -1,5 +1,11 @@
+import { UserRole } from '@db';
+
 export interface AuthenticatedUser {
-  userId: string;
+  id: string;
+  organizationId: string | null;
   email: string;
-  organizationId: string;
+  isSystemAdmin: boolean;
+  isActive: boolean;
+  isEmailVerified: boolean;
+  role?: UserRole;
 }

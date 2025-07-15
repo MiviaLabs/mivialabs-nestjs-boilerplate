@@ -142,20 +142,21 @@ export class LogoutUserHandler implements ICommandHandler<LogoutUserCommand> {
       });
 
       // Log events (non-blocking)
+      // Events for the same aggregate must be serialized to maintain proper sequence numbering
       try {
-        await Promise.all([
-          this.logUserLogout(userData, contextWithIds),
-          this.logAuthSessionEnded(userData, contextWithIds),
-          ...revokedTokens.map((token) =>
-            this.logTokenRevoked(
-              token.id,
-              userId,
-              organizationId,
-              'user_logout',
-              contextWithIds,
-            ),
-          ),
-        ]);
+        await this.logUserLogout(userData, contextWithIds);
+        await this.logAuthSessionEnded(userData, contextWithIds);
+
+        // Log token revocations sequentially
+        for (const token of revokedTokens) {
+          await this.logTokenRevoked(
+            token.id,
+            userId,
+            organizationId,
+            'user_logout',
+            contextWithIds,
+          );
+        }
       } catch (error) {
         this.logger.error(
           'Failed to log logout events - continuing operation',

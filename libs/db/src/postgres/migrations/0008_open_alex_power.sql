@@ -1,0 +1,2 @@
+DROP POLICY "refresh_token_system_auth_access" ON "refresh_token" CASCADE;--> statement-breakpoint
+CREATE POLICY "refresh_token_system_auth_access" ON "refresh_token" AS PERMISSIVE FOR ALL TO "system" USING (true);
