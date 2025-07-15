@@ -1,16 +1,37 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { DrizzlePostgresModule } from '@knaadh/nestjs-drizzle-postgres';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { JwtModule } from '@nestjs/jwt';
 
 import * as schema from '@db/postgres/schema';
 import { EmailModule, EmailProvider, EmailModuleConfig } from '@email';
+import { EventsModule } from '@events';
 import { HealthModule } from './modules/health/health.module';
+import { AuthModule } from './modules/auth/auth.module';
 import { StorageConfig, StorageModule, StorageProvider } from '@storage';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+    }),
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60000, // 1 minute
+        limit: 10, // 10 requests per minute (default)
+      },
+    ]),
+    JwtModule.registerAsync({
+      global: true,
+      useFactory: (configService: ConfigService) => ({
+        secret: configService.getOrThrow<string>('JWT_SECRET'),
+        signOptions: {
+          expiresIn: '15m',
+          issuer: configService.get<string>('JWT_ISSUER', 'mivialabs-api'),
+        },
+      }),
+      inject: [ConfigService],
     }),
     DrizzlePostgresModule.registerAsync({
       tag: 'DB',
@@ -94,7 +115,9 @@ import { StorageConfig, StorageModule, StorageProvider } from '@storage';
       }),
       inject: [ConfigService],
     }),
+    EventsModule,
     HealthModule,
+    AuthModule,
   ],
   controllers: [],
   providers: [],

@@ -11,8 +11,7 @@ import { TokenType } from '../enums/token-type.enum';
 
 @Injectable()
 export class JwtService {
-  private readonly accessTokenSecret: string;
-  private readonly refreshTokenSecret: string;
+  private readonly jwtSecret: string;
   private readonly accessTokenExpirationTime: string;
   private readonly refreshTokenExpirationTime: string;
 
@@ -20,16 +19,12 @@ export class JwtService {
     private readonly nestJwtService: NestJwtService,
     private readonly configService: ConfigService,
   ) {
-    this.accessTokenSecret =
-      this.configService.get<string>('JWT_ACCESS_SECRET') ||
-      'access-secret-key';
-    this.refreshTokenSecret =
-      this.configService.get<string>('JWT_REFRESH_SECRET') ||
-      'refresh-secret-key';
+    // Use JWT_SECRET for both access and refresh tokens
+    this.jwtSecret = this.configService.getOrThrow<string>('JWT_SECRET');
     this.accessTokenExpirationTime =
-      this.configService.get<string>('JWT_ACCESS_EXPIRATION') || '15m';
+      this.configService.get<string>('JWT_ACCESS_TOKEN_EXPIRATION') || '15m';
     this.refreshTokenExpirationTime =
-      this.configService.get<string>('JWT_REFRESH_EXPIRATION') || '7d';
+      this.configService.get<string>('JWT_REFRESH_TOKEN_EXPIRATION') || '7d';
   }
 
   async generateTokenPair(
@@ -38,15 +33,17 @@ export class JwtService {
     refreshTokenId: string,
   ): Promise<JwtTokenPair> {
     const now = new Date();
+    const nowMs = now.getTime();
+    // Add milliseconds to iat to ensure uniqueness in rapid succession
+    const iatWithMs = nowMs / 1000; // Keep millisecond precision
 
     // Generate access token
     const accessTokenPayload: JwtAccessTokenPayload = {
       sub: userId,
       organizationId,
-      iat: Math.floor(now.getTime() / 1000),
+      iat: iatWithMs,
       exp: Math.floor(
-        (now.getTime() +
-          this.parseExpirationToMs(this.accessTokenExpirationTime)) /
+        (nowMs + this.parseExpirationToMs(this.accessTokenExpirationTime)) /
           1000,
       ),
       type: TokenType.ACCESS,
@@ -57,10 +54,9 @@ export class JwtService {
       sub: userId,
       organizationId,
       tokenId: refreshTokenId,
-      iat: Math.floor(now.getTime() / 1000),
+      iat: iatWithMs,
       exp: Math.floor(
-        (now.getTime() +
-          this.parseExpirationToMs(this.refreshTokenExpirationTime)) /
+        (nowMs + this.parseExpirationToMs(this.refreshTokenExpirationTime)) /
           1000,
       ),
       type: TokenType.REFRESH,
@@ -68,10 +64,10 @@ export class JwtService {
 
     const [accessToken, refreshToken] = await Promise.all([
       this.nestJwtService.signAsync(accessTokenPayload, {
-        secret: this.accessTokenSecret,
+        secret: this.jwtSecret,
       }),
       this.nestJwtService.signAsync(refreshTokenPayload, {
-        secret: this.refreshTokenSecret,
+        secret: this.jwtSecret,
       }),
     ]);
 
@@ -80,6 +76,7 @@ export class JwtService {
       refreshToken,
       accessTokenExpiresAt: new Date(accessTokenPayload.exp * 1000),
       refreshTokenExpiresAt: new Date(refreshTokenPayload.exp * 1000),
+      expiresIn: Math.floor(accessTokenPayload.exp - accessTokenPayload.iat), // Access token expiry in seconds
     };
   }
 
@@ -87,7 +84,7 @@ export class JwtService {
     try {
       const payload =
         await this.nestJwtService.verifyAsync<JwtAccessTokenPayload>(token, {
-          secret: this.accessTokenSecret,
+          secret: this.jwtSecret,
         });
 
       if (payload.type !== TokenType.ACCESS) {
@@ -111,7 +108,7 @@ export class JwtService {
     try {
       const payload =
         await this.nestJwtService.verifyAsync<JwtRefreshTokenPayload>(token, {
-          secret: this.refreshTokenSecret,
+          secret: this.jwtSecret,
         });
 
       if (payload.type !== TokenType.REFRESH) {

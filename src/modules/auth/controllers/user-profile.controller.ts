@@ -5,13 +5,13 @@ import {
   ApiResponse,
   ApiBearerAuth,
 } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../../../common/guards';
+import { AuthGuard } from '@nestjs/passport';
 import { CurrentUser } from '../../../common/decorators';
 import { AuthenticatedUser } from '../interfaces/authenticated-user.interface';
 
 @ApiTags('User Profile')
 @Controller('user')
-@UseGuards(JwtAuthGuard) // Protect all routes in this controller
+@UseGuards(AuthGuard('jwt')) // Protect all routes in this controller
 @ApiBearerAuth() // Add JWT authorization to Swagger
 export class UserProfileController {
   @Get('profile')
@@ -37,7 +37,7 @@ export class UserProfileController {
   })
   getProfile(@CurrentUser() user: AuthenticatedUser) {
     return {
-      userId: user.userId,
+      userId: user.id,
       email: user.email,
       organizationId: user.organizationId,
     };
@@ -58,7 +58,7 @@ export class UserProfileController {
       },
     },
   })
-  getUserId(@CurrentUser('userId') userId: string) {
+  getUserId(@CurrentUser('id') userId: string) {
     return { userId };
   }
 
@@ -85,7 +85,7 @@ export class UserProfileController {
   getOrganizationInfo(@CurrentUser() user: AuthenticatedUser) {
     return {
       organizationId: user.organizationId,
-      userId: user.userId,
+      userId: user.id,
     };
   }
 }

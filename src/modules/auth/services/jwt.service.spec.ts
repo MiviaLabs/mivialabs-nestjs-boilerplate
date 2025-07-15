@@ -39,6 +39,7 @@ describe('JwtService', () => {
 
     const mockConfigService = {
       get: jest.fn(),
+      getOrThrow: jest.fn(() => 'test-jwt-secret'),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -64,10 +65,20 @@ describe('JwtService', () => {
       const config = {
         JWT_ACCESS_TOKEN_EXPIRATION: '15m',
         JWT_REFRESH_TOKEN_EXPIRATION: '7d',
-        JWT_SECRET: 'access-secret-key',
-        JWT_REFRESH_SECRET: 'refresh-secret-key',
+        JWT_SECRET: 'test-jwt-secret',
       };
       return config[key as keyof typeof config] || defaultValue;
+    });
+
+    configService.getOrThrow.mockImplementation((key: string) => {
+      const config = {
+        JWT_SECRET: 'test-jwt-secret',
+      };
+      const value = config[key as keyof typeof config];
+      if (value === undefined) {
+        throw new Error(`Configuration key "${key}" not found`);
+      }
+      return value;
     });
   });
 
@@ -96,6 +107,7 @@ describe('JwtService', () => {
         refreshToken: 'refresh-token',
         accessTokenExpiresAt: expect.any(Date),
         refreshTokenExpiresAt: expect.any(Date),
+        expiresIn: expect.any(Number),
       });
 
       expect(nestJwtService.signAsync).toHaveBeenCalledTimes(2);
@@ -109,7 +121,7 @@ describe('JwtService', () => {
           type: TokenType.ACCESS,
         });
         expect(accessTokenCall[1]).toEqual({
-          secret: 'access-secret-key',
+          secret: 'test-jwt-secret',
         });
       }
 
@@ -123,7 +135,7 @@ describe('JwtService', () => {
           type: TokenType.REFRESH,
         });
         expect(refreshTokenCall[1]).toEqual({
-          secret: 'refresh-secret-key',
+          secret: 'test-jwt-secret',
         });
       }
     });
@@ -151,7 +163,7 @@ describe('JwtService', () => {
       expect(result.organizationId).toBe(mockAccessTokenPayload.organizationId);
 
       expect(nestJwtService.verifyAsync).toHaveBeenCalledWith(token, {
-        secret: 'access-secret-key',
+        secret: 'test-jwt-secret',
       });
     });
 
@@ -206,7 +218,7 @@ describe('JwtService', () => {
       );
 
       expect(nestJwtService.verifyAsync).toHaveBeenCalledWith(token, {
-        secret: 'refresh-secret-key',
+        secret: 'test-jwt-secret',
       });
     });
 

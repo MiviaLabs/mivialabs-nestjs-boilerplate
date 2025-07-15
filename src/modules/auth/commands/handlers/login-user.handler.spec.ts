@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { LoginUserHandler } from './login-user.handler';
 import { LoginUserCommand } from '../login-user.command';
 import { JwtService } from '../../services/jwt.service';
@@ -98,6 +99,12 @@ describe('LoginUserHandler', () => {
         {
           provide: EventsService,
           useValue: mockEventsService,
+        },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn().mockReturnValue('7d'),
+          },
         },
       ],
     }).compile();

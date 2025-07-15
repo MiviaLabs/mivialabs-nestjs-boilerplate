@@ -2,6 +2,10 @@ CREATE TYPE "public"."user_role" AS ENUM('system_admin', 'organization_owner', '
 CREATE ROLE "authenticated";--> statement-breakpoint
 CREATE ROLE "system_admin";--> statement-breakpoint
 CREATE ROLE "system";--> statement-breakpoint
+-- GRANT system TO postgres;
+-- GRANT authenticated TO postgres;
+-- GRANT system_admin TO postgres;
+
 CREATE TABLE "event" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"event_type" text NOT NULL,

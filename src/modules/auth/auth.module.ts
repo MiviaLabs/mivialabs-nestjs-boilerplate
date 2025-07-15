@@ -3,6 +3,7 @@ import { CqrsModule } from '@nestjs/cqrs';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { PassportModule } from '@nestjs/passport';
 
 // Controllers
 import { AuthController } from './controllers/auth.controller';
@@ -24,6 +25,8 @@ import { ValidateOrganizationSlugHandler } from './queries/handlers/validate-org
 
 // External modules
 import { EventsModule } from '@events';
+import { JwtStrategy } from '../../common/strategies/jwt-strategy';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 // Database module is provided globally via app.module.ts
 
 const commandHandlers = [
@@ -44,12 +47,15 @@ const queryHandlers = [
     ConfigModule,
     EventsModule,
     JwtModule.register({}),
+    PassportModule,
     ThrottlerModule,
   ],
   controllers: [AuthController, UserProfileController],
   providers: [
     CustomJwtService,
     PasswordService,
+    JwtStrategy,
+    JwtAuthGuard,
     ...commandHandlers,
     ...queryHandlers,
   ],

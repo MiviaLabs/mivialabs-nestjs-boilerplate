@@ -2,15 +2,22 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { ThrottlerGuard } from '@nestjs/throttler';
 import helmet from 'helmet';
 import { AppModule } from '../../src/app.module';
 import { TestEnvironment, TestConfig } from './test-environment.interface';
+import { TestMigration } from '../utils/test-migration';
 
 export class TestAppFactory {
   static async create(environment: TestEnvironment): Promise<INestApplication> {
     console.log('🏗️ Creating test NestJS application...');
 
     const testConfig = this.createTestConfig(environment);
+
+    // Wait for database and run migrations
+    console.log('Database URL:', testConfig.DATABASE_URL);
+    await this.waitForDatabaseSimple(testConfig.DATABASE_URL);
+    await this.runMigrationsSimple(testConfig.DATABASE_URL);
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
@@ -28,6 +35,10 @@ export class TestAppFactory {
           }
           return value;
         },
+      })
+      .overrideGuard(ThrottlerGuard)
+      .useValue({
+        canActivate: () => true, // Always allow requests in tests
       })
       .compile();
 
@@ -57,9 +68,11 @@ export class TestAppFactory {
       PORT: '0', // Let the test framework assign a port
       HOST: '127.0.0.1',
       JWT_SECRET: 'test-jwt-secret-key-for-e2e-tests-only',
+      JWT_ISSUER: 'mivialabs-api-test',
       JWT_EXPIRES_IN: '1h',
       ENCRYPTION_KEY: 'test-encryption-key-32-chars-long!',
       CORS_ALLOWED_ORIGINS: 'http://localhost:3000,http://127.0.0.1:3000',
+      APP_ACCOUNT_ACTIVE_AFTER_SIGNUP: 'true', // Default to true for most tests
       // Email service config (using mock Resend for tests)
       EMAIL_PROVIDER: 'resend',
       EMAIL_FROM: 'test@example.com',
@@ -174,11 +187,61 @@ export class TestAppFactory {
     SwaggerModule.setup('docs', app, documentFactory);
   }
 
+  private static async waitForDatabaseSimple(
+    databaseUrl: string,
+  ): Promise<void> {
+    console.log('⏳ Waiting for database to be ready...');
+    const { exec } = await import('child_process');
+    const { promisify } = await import('util');
+    const execAsync = promisify(exec);
+
+    for (let i = 0; i < 30; i++) {
+      try {
+        const testQuery = `psql "${databaseUrl}" -c "SELECT 1" > /dev/null 2>&1`;
+        await execAsync(testQuery);
+        console.log('✅ Database is ready!');
+        return;
+      } catch {
+        console.log(`⏳ Database not ready yet, attempt ${i + 1}/30...`);
+        if (i === 29) {
+          throw new Error('Database connection timeout');
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+    }
+  }
+
+  private static async runMigrationsSimple(databaseUrl: string): Promise<void> {
+    console.log('🔄 Running database migrations for tests...');
+    const { exec } = await import('child_process');
+    const { promisify } = await import('util');
+    const execAsync = promisify(exec);
+
+    try {
+      const env = { ...process.env, DATABASE_URL: databaseUrl };
+      const { stderr } = await execAsync('npx tsx drizzle-migrate.ts', {
+        env,
+      });
+
+      if (stderr && !stderr.includes('Migration completed successfully')) {
+        console.error('Migration stderr:', stderr);
+      }
+
+      console.log('✅ Database migrations completed successfully!');
+    } catch (error) {
+      console.error('❌ Database migration failed:', error);
+      throw error;
+    }
+  }
+
   static async close(app: INestApplication): Promise<void> {
     if (app) {
       console.log('🔌 Closing test application...');
       await app.close();
       console.log('✅ Test application closed');
     }
+
+    // Close migration connection if still open
+    await TestMigration.closeMigrationConnection();
   }
 }

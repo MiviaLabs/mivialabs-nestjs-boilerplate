@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { JwtStrategy, JwtPayload, AuthenticatedUser } from './jwt-strategy';
 import { UserRole } from '@db';
 
@@ -64,6 +65,13 @@ describe('JwtStrategy', () => {
         {
           provide: 'DB',
           useValue: mockDb,
+        },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn(() => JWT_SECRET),
+            getOrThrow: jest.fn(() => JWT_SECRET),
+          },
         },
       ],
     }).compile();
@@ -258,7 +266,11 @@ describe('JwtStrategy', () => {
       const testSecret = 'different-secret';
       process.env.JWT_SECRET = testSecret;
 
-      const newStrategy = new JwtStrategy(mockDb);
+      const mockConfigService = {
+        get: jest.fn(() => testSecret),
+        getOrThrow: jest.fn(() => testSecret),
+      };
+      const newStrategy = new JwtStrategy(mockDb, mockConfigService as any);
 
       expect(newStrategy).toBeDefined();
     });

@@ -32,9 +32,11 @@ export interface TestConfig {
   PORT: string;
   HOST: string;
   JWT_SECRET: string;
+  JWT_ISSUER: string;
   JWT_EXPIRES_IN: string;
   ENCRYPTION_KEY: string;
   CORS_ALLOWED_ORIGINS: string;
+  APP_ACCOUNT_ACTIVE_AFTER_SIGNUP: string;
   // Email service config
   EMAIL_PROVIDER: string;
   EMAIL_FROM: string;

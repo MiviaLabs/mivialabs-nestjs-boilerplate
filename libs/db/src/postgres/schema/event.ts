@@ -80,10 +80,11 @@ export const event = pgTable(
       using: sql`${table.organizationId} IS NULL OR ${table.organizationId} = current_setting('app.current_organization_id')::uuid`,
     }),
 
-    // Only system processes can insert events (event sourcing pattern)
-    pgPolicy('event_insert_system_only', {
-      for: 'insert',
+    // System admins have full access for debugging/maintenance
+    pgPolicy('event_system_full_access', {
+      for: 'all',
       to: systemRole,
+      using: sql`true`,
       withCheck: sql`true`,
     }),
 
