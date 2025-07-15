@@ -316,7 +316,8 @@ export class AuthController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary: 'User signup',
-    description: 'Create new user account and organization, returns JWT tokens',
+    description:
+      'Create new user account and organization, returns JWT tokens. Account activation depends on APP_ACCOUNT_ACTIVE_AFTER_SIGNUP configuration.',
   })
   @ApiBody({
     type: SignupDto,

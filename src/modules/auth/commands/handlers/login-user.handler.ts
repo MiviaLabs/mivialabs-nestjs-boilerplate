@@ -9,6 +9,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { eq } from 'drizzle-orm';
 import { PostgresDb } from '@db/postgres/types/postgres-db.type';
 import { user, User } from '@db/postgres/schema/user';
+import { organization } from '@db/postgres/schema/organization';
 import { refreshToken } from '@db/postgres/schema/refresh-token';
 import { EventsService, EventContext } from '@events/events.service';
 import { JwtService } from '../../services/jwt.service';
@@ -78,6 +79,24 @@ export class LoginUserHandler implements ICommandHandler<LoginUserCommand> {
           organizationId: userData.organizationId || undefined,
         });
         throw new UnauthorizedException('Account is not active');
+      }
+
+      // Check if organization is active
+      if (userData.organizationId) {
+        const foundOrganization = await this.db
+          .select({ isActive: organization.isActive })
+          .from(organization)
+          .where(eq(organization.id, userData.organizationId))
+          .limit(1);
+
+        if (foundOrganization.length > 0 && !foundOrganization[0]!.isActive) {
+          await this.logLoginFailure(email, `Organization is not active`, {
+            ...context,
+            userId: userData.id,
+            organizationId: userData.organizationId,
+          });
+          throw new UnauthorizedException('Organization is not active');
+        }
       }
 
       // Verify password

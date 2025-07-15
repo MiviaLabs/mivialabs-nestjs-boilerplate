@@ -6,6 +6,7 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { v4 as uuidv4 } from 'uuid';
 import { eq } from 'drizzle-orm';
 import { PostgresDb } from '@db/postgres/types/postgres-db.type';
@@ -37,6 +38,7 @@ export class SignupUserHandler implements ICommandHandler<SignupUserCommand> {
     private readonly passwordService: PasswordService,
     private readonly eventsService: EventsService,
     private readonly queryBus: QueryBus,
+    private readonly configService: ConfigService,
   ) {}
 
   async execute(command: SignupUserCommand): Promise<AuthResponseDto> {
@@ -94,28 +96,34 @@ export class SignupUserHandler implements ICommandHandler<SignupUserCommand> {
           signupDto.password,
         );
 
-        // 4. Create organization
+        // 4. Check if accounts should be active after signup
+        const isAccountActiveAfterSignup = this.configService.get<boolean>(
+          'APP_ACCOUNT_ACTIVE_AFTER_SIGNUP',
+          false,
+        );
+
+        // 5. Create organization
         const organizationId = uuidv4();
         const organizationData = {
           id: organizationId,
           name: signupDto.organizationName,
           slug: signupDto.organizationSlug.toLowerCase(),
           description: signupDto.organizationDescription || null,
-          isActive: true,
+          isActive: isAccountActiveAfterSignup,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
 
         await tx.insert(organization).values(organizationData);
 
-        // 5. Create user
+        // 6. Create user
         const userId = uuidv4();
         const userData = {
           id: userId,
           organizationId,
           email: signupDto.email.toLowerCase(),
           passwordHash: hashedPassword,
-          isActive: true,
+          isActive: isAccountActiveAfterSignup,
           isEmailVerified: false,
           isSystemAdmin: false,
           createdAt: new Date().toISOString(),
@@ -124,7 +132,7 @@ export class SignupUserHandler implements ICommandHandler<SignupUserCommand> {
 
         await tx.insert(user).values(userData);
 
-        // 6. Generate JWT token pair
+        // 7. Generate JWT token pair
         const refreshTokenId = uuidv4();
         const tokenPair = await this.jwtService.generateTokenPair(
           userId,
@@ -132,7 +140,7 @@ export class SignupUserHandler implements ICommandHandler<SignupUserCommand> {
           refreshTokenId,
         );
 
-        // 7. Store refresh token
+        // 8. Store refresh token
         await this.storeRefreshToken(
           tx,
           refreshTokenId,
@@ -162,7 +170,7 @@ export class SignupUserHandler implements ICommandHandler<SignupUserCommand> {
         organizationId: orgData.id,
       };
 
-      // 8. Log events (outside transaction to avoid blocking)
+      // 9. Log events (outside transaction to avoid blocking)
       await Promise.all([
         this.logOrganizationCreated(orgData, signupDto, contextWithIds),
         this.logUserCreated(userData, contextWithIds),
